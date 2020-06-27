@@ -21,8 +21,6 @@ bool equal(const std::any &lhs, const std::any &rhs) {
 }
 
 static bool strEqual(const std::any &lhs, const std::any &rhs) {
-  //std::cout << "= " << flexi_cast<std::string>(lhs) << " - " << flexi_cast<std::string>(rhs) << " -> "
-  //  << strcmp(flexi_cast<std::string>(lhs).c_str(), flexi_cast<std::string>(rhs).c_str());
   return strcmp(flexi_cast<std::string>(lhs).c_str(), flexi_cast<std::string>(rhs).c_str()) == 0;
 }
 
@@ -41,11 +39,9 @@ static inline bool any_equal(const std::any &lhs, const std::any &rhs) {
     return comparators.at(lhs.type())(lhs, rhs);
   }
   catch (const std::out_of_range &) {
-    std::cout << "types out of range" << std::endl;
     return false;
   }
   catch (const std::bad_any_cast &) {
-    std::cout << "incompatible types" << std::endl;
     return false;
   }
 }
@@ -338,51 +334,6 @@ namespace ExpressionSpec {
     pegtl::parse_tree::apply<Rearrange>::to<Expression>
   >;
 }
-
-class TreeNode {
-public:
-  TreeNode() = default;
-  ~TreeNode() = default;
-
-  std::string value() const { return "42"; }
-
-  // all non-root nodes are initialized by calling this method
-  template<typename Rule, typename Input>
-  void start(const Input &in) {
-    std::cout << "start " << in.source() << std::endl;
-  }
-
-  // if parsing of the rule succeeded, this method is called
-  template< typename Rule, typename Input >
-  void success(const Input& in) {
-    std::cout << "success " << in.source() << std::endl;
-  }
-
-  // if parsing of the rule failed, this method is called
-  template< typename Rule, typename Input >
-  void failure(const Input& in) {
-    std::cout << "failure " << in.source() << std::endl;
-  }
-
-  // if parsing succeeded and the (optional) transform call
-  // did not discard the node, it is appended to its parent.
-  // note that "child" is the node whose Rule just succeeded
-  // and *this is the parent where the node should be appended.
-  void append(std::unique_ptr<TreeNode> child) {
-    std::cout << "append" << std::endl;
-  }
-
-  void emplace_back(std::unique_ptr<TreeNode> child) {
-    std::cout << "emplace_back" << std::endl;
-  }
-
-private:
-  TreeNode(const TreeNode&) = delete;
-  TreeNode(TreeNode&&) = delete;
-
-  TreeNode& operator=(const TreeNode&) = delete;
-  TreeNode& operator=(TreeNode&&) = delete;
-};
 
 static void printNode(const pegtl::parse_tree::node &node, const std::string &indent = "") {
   if (node.is_root()) {

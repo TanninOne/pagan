@@ -37,21 +37,7 @@ public:
 
   static LogBracket create(const std::string &message);
 
-  /*
-  template <typename ...Args>
-  static LogBracket create(const std::string &message, const Args &...args) {
-    return LogBracket(fmt::format(message, ...args));
-  }
-  */
-
   static void log(const std::string &message);
-
-  /*
-  template <typename ...Args>
-  static void log(const std::string &message, const Args &...args) {
-    std::cout << indent() << fmt::format(message, ...args);
-  }
-  */
 
   static int getIndentDepth() {
     return s_Indent;

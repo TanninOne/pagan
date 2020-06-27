@@ -16,7 +16,6 @@ int StreamRegistry::add(std::shared_ptr<IOWrapper> stream) {
 }
 
 std::shared_ptr<IOWrapper> StreamRegistry::get(DataStreamId id, DataOffset offset) const {
-  // std::cout << "seek 2 " << (static_cast<DataOffset>(m_Streams[id]->tellg()) - offset) << " - " << m_Streams[id]->tellg() << " -> " << offset << std::endl;
   m_Streams[id]->seekg(offset);
   return m_Streams[id];
 }

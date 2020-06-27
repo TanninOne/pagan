@@ -48,6 +48,4 @@ IOWrapper::~IOWrapper() {
   if (m_Buffer != nullptr) {
     delete m_Buffer;
   }
-
-  std::cout << "seek count " << m_SeekCount << std::endl;
 }

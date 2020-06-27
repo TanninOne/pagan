@@ -6,6 +6,14 @@
 #include <sstream>
 #include <algorithm>
 
+/**
+ * stream-like wrapper around memory sections or files.
+ * This reads entire blocks from the underlying storage and then serves reads from that cache
+ * when possible.
+ * It also delays seeks and then only actually does them on the file object when that is necessary
+ * to fill the cache.
+ * This frees the caller from doing those optimizations
+ */
 class IOWrapper {
 public:
 

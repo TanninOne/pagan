@@ -9,10 +9,6 @@ static const int MAX_DEPTH = 2;
 
 void debugStream(const std::shared_ptr<IOWrapper>& str) {
   std::streamoff posG = str->tellg();
-  /*
-  std::streamoff posP = str->tellp();
-  std::streamoff pos = std::max(posG, posP);
-  */
   std::streamoff pos = str->size();
   str->seekg(0);
   std::cout << "Debugging stream up to: " << pos << std::endl << std::hex;
@@ -31,9 +27,6 @@ LogBracket::LogBracket(const std::string & message)
   if (s_Indent <= MAX_DEPTH) {
     std::cout << indent() << "+++" << message << std::endl;
   }
-  else {
-    // std::cout << "+++ " << s_Indent << " - " << message << std::endl;
-  }
   ++s_Indent;
 }
 
@@ -41,9 +34,6 @@ LogBracket::~LogBracket() {
   --s_Indent;
   if (s_Indent <= MAX_DEPTH) {
     std::cout << indent() << "---" << m_Message << std::endl;
-  }
-  else {
-    // std::cout << "--- " << s_Indent << " - " << m_Message << std::endl;
   }
 }
 

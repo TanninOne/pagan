@@ -128,7 +128,7 @@ public:
     SizeFunc size;
     AssignCB onAssign;
     
-    std::tie(typeId, offset, size, onAssign) = m_Spec.lock()->getFull(m_ObjectIndex, key);
+    std::tie(typeId, offset, size, onAssign) = m_Spec->getFull(m_ObjectIndex, key);
 
     if (typeId >= TypeId::custom) {
       throw IncompatibleType("expected POD");
@@ -208,7 +208,6 @@ inline DynObject DynObject::get(const char *key) const {
   std::shared_ptr<TypeSpec> type(m_Spec->getRegistry()->getById(typeId));
 
   if (!type) {
-    std::cout << "invalid type id " << typeId << std::endl;
     throw IncompatibleType(fmt::format("type id not found in registry {}", typeId).c_str());
   }
 

@@ -145,7 +145,6 @@ uint8_t *TypeSpec::indexCustom(const TypeProperty &prop, uint32_t typeId,
     if (newLimit != streamLimit) {
       int64_t lim = newLimit;
       if (lim < 0) {
-        std::cout << "limit invalid " << lim << " - " << dataPos << " - " << size << std::endl;
         ObjSize again = prop.size(*obj);
       }
       LOG_F("new stream limit {} (has size: {})", lim, prop.hasSizeFunc);

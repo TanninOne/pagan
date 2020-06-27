@@ -16,8 +16,6 @@ uint32_t getNamedType(NamedTypes &types, Parser &parser, const std::string &name
 std::map<std::string, uint32_t> makeCases(const YAML::Node &spec, NamedTypes &types, Parser &parser) {
   std::map<std::string, uint32_t> result;
 
-  std::cout << spec.IsDefined() << " - " << spec.IsMap() << " - " << spec.IsSequence() << " - " << spec.IsScalar() << " - " << spec.IsNull() << std::endl;
-
   if (!spec.IsMap()) {
     throw std::runtime_error("expected a map");
   }
@@ -37,7 +35,6 @@ void addProperties(Parser &parser, NamedTypes &types, std::shared_ptr<TypeSpec> 
   for (size_t i = 0; i < spec.size(); ++i) {
     YAML::Node entry = spec[i];
     std::string name = entry["id"].as<std::string>();
-    std::cout << "add prop " << i << "/" << spec.size() << " : "  << name << std::endl;
 
     uint32_t typeId;
     YAML::Node typeNode = entry["type"];
@@ -80,7 +77,6 @@ void addProperties(Parser &parser, NamedTypes &types, std::shared_ptr<TypeSpec> 
 void createTypeFromYAML(Parser &parser, NamedTypes &types, const char *name, const YAML::Node &spec);
 
 void addSubTypes(Parser &parser, NamedTypes &types, const YAML::Node &spec) {
-  std::cout << "++++++" << std::endl;
   if (!spec.IsDefined()) {
     return;
   }
@@ -90,10 +86,8 @@ void addSubTypes(Parser &parser, NamedTypes &types, const YAML::Node &spec) {
   }
 
   for (YAML::const_iterator it = spec.begin(); it != spec.end(); ++it) {
-    std::cout << "* " << it->first.as<std::string>() << std::endl;
     createTypeFromYAML(parser, types, it->first.as<std::string>().c_str(), it->second);
   }
-  std::cout << "-----" << std::endl;
 }
 
 void createTypeFromYAML(Parser &parser,
@@ -104,9 +98,7 @@ void createTypeFromYAML(Parser &parser,
 
   std::shared_ptr<TypeSpec> type = parser.createType(name);
   types[name] = type->getId();
-  std::cout << "xxxx" << std::endl;
   addProperties(parser, types, type, spec["seq"]);
-  std::cout << "yyyy" << std::endl;
 }
 
 void initBaseTypes(NamedTypes &types) {

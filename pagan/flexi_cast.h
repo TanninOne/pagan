@@ -61,7 +61,6 @@ inline std::string flexi_cast<std::string>(const std::any &input) {
       return str.str();
     }
     catch (const std::out_of_range&) {
-      std::cout << "unsupported type " << input.type().name() << std::endl;
       return "";
     }
   }

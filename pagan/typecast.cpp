@@ -52,7 +52,6 @@ template <> std::string type_read(TypeId type, char *index, std::shared_ptr<IOWr
 
   int32_t seekOffset = static_cast<int32_t>(curPos) - offset;
   if (seekOffset != 0) {
-    // std::cout << "seek 3 " << offset - stream->tellg() << " - " << stream->tellg() << " -> " << offset << std::endl;
     stream->seekg(offset);
   }
 
@@ -150,7 +149,6 @@ template <typename T> char *type_index_num(char *index, std::shared_ptr<IOWrappe
     return index + sizeof(T);
   }
   catch (const std::exception &e) {
-    std::cout << "Failed to read from stream " << e.what() << " - " << errno << std::endl;
     throw;
   }
 }
@@ -173,7 +171,6 @@ template <> char *type_index_impl<std::string>(char *index, std::shared_ptr<IOWr
 
   if (sizeField) {
     int32_t size = sizeFunc(*obj);
-    // std::cout << "seek 5 " << data->tellg() << " -> " << (offset + size) << std::endl;
     char temp[5];
     std::streampos pos = data->tellg();
     data->read(temp, 4);
@@ -185,7 +182,6 @@ template <> char *type_index_impl<std::string>(char *index, std::shared_ptr<IOWr
         && ((temp[3] < 'A') || (temp[3] > 'Z'))
         && ((temp[3] < '0') || (temp[3] > '9'))
         && (temp[3] != '_')) {
-      std::cout << "wut? " << temp << " - " << pos << " ; last: " << lastStr << " - " << lastPos << std::endl;
       if (memcmp(temp, "\0\0\0\0", 4) != 0) {
         exit(1);
       }

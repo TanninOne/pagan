@@ -11,6 +11,7 @@
 #include <fstream>
 #include <any>
 #include <memory>
+#include <ctime>
 
 std::function<bool(const DynObject&)> findGRUP(const char *groupName) {
   return [groupName](const DynObject &obj) {
@@ -29,10 +30,13 @@ int main(int argc, char **argv) {
 
     parser->addFileStream(argv[1]);
 
-    LogBracket::log("create root element");
+    std::cout << "create root element" << std::endl;
+    time_t start = time(nullptr);
 
     // create an object
     DynObject obj = parser->getObject(parser->getType("root"), 0);
+
+    std::cout << "parsing done in " << (int)std::difftime(time(nullptr), start) << " seconds" << std::endl;
 
     auto recList = obj.getList<DynObject>("root");
     std::cout << "# items at root: " << recList.size() << std::endl;
@@ -42,7 +46,7 @@ int main(int argc, char **argv) {
     armorGroup->get<DynObject>("data").debug(0);
     auto armorRecs = armorGroup->get<DynObject>("data").get<DynObject>("records").getList<DynObject>("entries");
 
-    std::cout << "# armor recs " << armorRecs.size() << std::endl;
+    std::cout << "# armor recs: " << armorRecs.size() << std::endl;
 
     int ctr = 0;
 
@@ -54,10 +58,11 @@ int main(int argc, char **argv) {
         armor.get<DynObject>("data").get<DynObject>("z_record").get<DynObject>("value").debug(3);
         auto value = armor.get<DynObject>("data").get<DynObject>("z_record").get<DynObject>("value");
         auto fields = value.getList<DynObject>("fields");
-        for (const auto &field : fields) {
+        for (auto &field : fields) {
           std::string type = field.get<std::string>("type");
           // std::cout << "field type " << type << std::endl;
           if (type == "MOD2") {
+            field.set<std::string>("data", std::string("foobar"));
 //             std::cout << "male model " << field.get<std::string>("data") << std::endl;
           }
           else if (type == "MOD4") {
