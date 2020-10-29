@@ -15,7 +15,12 @@ void Parser::addFileStream(const char * filePath) {
   m_StreamRegistry.add(ptr);
 }
 
-DynObject Parser::getObject(const std::shared_ptr<TypeSpec>& spec, size_t offset, DataStreamId dataStream) {
+void Parser::write(const char *filePath, DynObject &obj) const {
+  std::shared_ptr<IOWrapper> ptr(IOWrapper::fromFile(filePath, true));
+  obj.saveTo(ptr);
+}
+
+DynObject Parser::getObject(const std::shared_ptr<TypeSpec> &spec, size_t offset, DataStreamId dataStream) {
   std::shared_ptr<IOWrapper> stream = m_StreamRegistry.get(dataStream);
 
   ObjectIndex *rootIndex = m_IndexTable.allocateObject(spec, dataStream, offset);

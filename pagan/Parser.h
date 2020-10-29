@@ -13,6 +13,8 @@ public:
 
   void addFileStream(const char *filePath);
 
+  void write(const char *filePath, DynObject &obj) const;
+
   std::shared_ptr<TypeSpec> getType(const char *name) const;
 
   DynObject getObject(const std::shared_ptr<TypeSpec> &spec, size_t offset, DataStreamId dataStream = 0);

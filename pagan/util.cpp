@@ -5,7 +5,7 @@
 
 thread_local int LogBracket::s_Indent = 0;
 
-static const int MAX_DEPTH = 2;
+static const int MAX_DEPTH = 3;
 
 void debugStream(const std::shared_ptr<IOWrapper>& str) {
   std::streamoff posG = str->tellg();

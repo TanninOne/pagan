@@ -1,5 +1,8 @@
 #include "parserFromKSY.h"
 #include "expr.h"
+#ifndef _NOEXCEPT
+#define _NOEXCEPT noexcept
+#endif
 #include <yaml-cpp/yaml.h>
 
 typedef std::map<std::string, uint32_t> NamedTypes;
@@ -57,6 +60,11 @@ void addProperties(Parser &parser, NamedTypes &types, std::shared_ptr<TypeSpec> 
     TypePropertyBuilder prop = type->appendProperty(entry["id"].as<std::string>().c_str(), typeId);
     if (entry["size"].IsDefined()) {
       prop.withSize(makeFunc<ObjSize>(entry["size"].as<std::string>()));
+    }
+    if (entry["assign"].IsDefined()) {
+      // TODO return value is just a workaround since makeFunc is written to require one, we neither expect
+      // the cb to return something nor do we make use of the return value
+      prop.onAssign(makeFuncMutable<bool>(entry["assign"].as<std::string>()));
     }
     if (entry["if"].IsDefined()) {
       prop.withCondition(makeFunc<bool>(entry["if"].as<std::string>()));

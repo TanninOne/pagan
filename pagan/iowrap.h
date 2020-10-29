@@ -19,7 +19,7 @@ public:
 
   static IOWrapper *memoryBuffer();
 
-  static IOWrapper *fromFile(const char *filePath);
+  static IOWrapper *fromFile(const char *filePath, bool out = false);
 
   IOWrapper() = delete;
   IOWrapper(const IOWrapper &reference);
@@ -93,9 +93,17 @@ public:
     // buffered reading
     if ((m_BufferPos == -1)
         || (m_PosG < m_BufferPos)
-        || (m_PosG + count > m_BufferPos + m_BufferSize)) {
+        || ((m_PosG + count) > (m_BufferPos + m_BufferSize))) {
       int64_t oldPos = m_BufferPos;
-      m_BufferPos = std::max(0LL, m_PosG - (m_BufferSize / 2));
+      if (m_BufferSize < count) {
+        m_BufferSize = count * 2;
+        delete [] m_Buffer;
+        m_Buffer = new char[m_BufferSize];
+      }
+      // we fill the entire buffer, the range actually requested will be in the middle of the buffer so that we
+      // can also fulfill future requests before and after the requested range
+      int64_t padding = m_BufferSize - count;
+      m_BufferPos = std::max(0LL, m_PosG - (padding / 2));
       if ((m_Size != -1) && (m_BufferPos + m_BufferSize > m_Size)) {
         // don't buffer beyond the file
         m_BufferSize = static_cast<int32_t>(m_Size - m_BufferPos);
@@ -155,7 +163,7 @@ private:
   bool m_SeekGPending{ false };
   bool m_SeekPPending{ false };
 
-  int32_t m_BufferSize{ -1 };
+  std::streamsize m_BufferSize{ -1 };
   std::streamoff m_BufferPos;
   char *m_Buffer{ nullptr };
 

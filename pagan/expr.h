@@ -15,6 +15,8 @@
 
 namespace pegtl = tao::TAO_PEGTL_NAMESPACE;
 
+typedef std::function<std::any(const std::any& args)> AnyFunc;
+
 template <typename T>
 bool equal(const std::any &lhs, const std::any &rhs) {
   return flexi_cast<T>(lhs) == flexi_cast<T>(rhs);
@@ -75,6 +77,7 @@ namespace ExpressionSpec {
   };
 
   typedef std::function<std::any(const std::string &key, uint64_t id)> VariableResolver;
+  typedef std::function<void(const std::string &key, const std::any &value)> VariableAssigner;
 
   struct Operation
   {
@@ -256,13 +259,15 @@ namespace ExpressionSpec {
   struct Number : seq<opt<one<'+', '-'>>, plus<digit>> {};
   struct HexNumber : seq<one<'0'>, one<'x'>, plus<xdigit>> {};
   struct String : seq<one<'"'>, star<not_one<'"'>>, one<'"'>> {};
-  struct Variable : seq<sor<alpha, one<'_'>>, star<sor<alnum, one<'.'>, one<'_'>>>> {};
+  struct Identifier : seq<sor<alpha, one<'_'>>, star<sor<alnum, one<'.'>, one<'_'>>>> {};
   struct Expression;
+  struct Function;
   struct Bracket : if_must<one<'('>, Expression, one<')'>> {};
-  struct Atomic : sor<HexNumber, Number, String, Variable, Bracket> {};
-
+  struct Atomic : sor<HexNumber, Number, String, Function, Identifier, Bracket> {};
+  struct Assignment : seq<Identifier, star<Ignored>, one<'='>, star<Ignored>, Expression> {};
+  struct Function : seq<Identifier, one<'('>, Atomic, one<')'>> {};
   struct Expression : list<Atomic, Infix, Ignored> {};
-  struct Grammar : must<Expression, eof> {};
+  struct Grammar : must<sor<Assignment, Expression>, eof> {};
 
   template<typename Rule>
   struct Action : pegtl::nothing<Rule> {};
@@ -299,7 +304,7 @@ namespace ExpressionSpec {
   };
 
   template <>
-  struct Action<Variable>
+  struct Action<Identifier>
   {
     template<typename Input>
     static void apply(const Input &input, const Operators&, Stacks &stacks, const VariableResolver &variables)
@@ -329,7 +334,7 @@ namespace ExpressionSpec {
   template <typename Rule>
   using Selector = pegtl::parse_tree::selector<
     Rule,
-    pegtl::parse_tree::apply_store_content::to<Number, HexNumber, String, Variable, Infix>,
+    pegtl::parse_tree::apply_store_content::to<Number, HexNumber, String, Identifier, Function, Infix>,
     pegtl::parse_tree::apply_remove_content::to<>,
     pegtl::parse_tree::apply<Rearrange>::to<Expression>
   >;
@@ -376,24 +381,35 @@ static std::map<std::string, std::function<std::any(const std::any&, const std::
 };
 
 
-static std::any evalNode(const pegtl::parse_tree::node &node, const ExpressionSpec::VariableResolver &resolver) {
+static std::any evalNode(const pegtl::parse_tree::node &node, const ExpressionSpec::VariableResolver &resolver, const ExpressionSpec::VariableAssigner &assigner) {
   if (node.is_root()) {
-    return evalNode(*node.children.front(), resolver);
+    std::any res = evalNode(**node.children.rbegin(), resolver, assigner);
+    if (node.children.size() == 2) {
+      std::any varAny = evalNode(*node.children.front(), [](const std::string& key, uint64_t id) { return key; }, assigner);
+      std::string var = flexi_cast<std::string>(varAny);
+      assigner(var, res);
+    }
+    
+    return res;
   }
   else if (node.is<ExpressionSpec::Infix>()) {
-    const auto &iter = operators.find(node.content());
+    const auto& iter = operators.find(node.content());
 
-    std::any lhs = evalNode(*(node.children.at(0)), resolver);
-    std::any rhs = evalNode(*(node.children.at(1)), resolver);
+    std::any lhs = evalNode(*(node.children.at(0)), resolver, assigner);
+    std::any rhs = evalNode(*(node.children.at(1)), resolver, assigner);
     return (iter->second)(lhs, rhs);
-  } else if (node.is<ExpressionSpec::Variable>()) {
+  } else if (node.is<ExpressionSpec::Function>()) {
+    std::any arg = evalNode(*(node.children.at(1)), resolver, assigner);
+    AnyFunc func = std::any_cast<AnyFunc>(evalNode(*(node.children.at(0)), resolver, assigner));
+    return func(arg);
+  } else if (node.is<ExpressionSpec::Identifier>()) {
     return resolver(node.content(), reinterpret_cast<uint64_t>(node.m_begin.data));
   } else if (node.is<ExpressionSpec::HexNumber>()) {
     return strtol(node.content().c_str(), nullptr, 16);
   } else if (node.is<ExpressionSpec::Number>()) {
     return strtol(node.content().c_str(), nullptr, 10);
   } else if (node.is<ExpressionSpec::String>()) {
-    const std::string &content = node.content();
+    const std::string& content = node.content();
     return std::string(content, 1, content.length() - 2);
   } else {
     return node.content();
@@ -423,11 +439,69 @@ std::function<T(const DynObject &)> makeFuncImpl(const std::string &code) {
         varIter = variables.find(id);
         // varIter = variables.insert(std::make_pair(id, splitVariable(key))).first;
       }
-      ObjectIndex *idx = obj.getIndex();
+      // ObjectIndex *idx = obj.getIndex();
       return obj.getAny(varIter->second.begin(), varIter->second.end());
     };
 
-    std::any res = evalNode(*tree, resolver);
+    ExpressionSpec::VariableAssigner assigner = [&obj, &variables](const std::string &key, const std::any &value) {
+      throw std::runtime_error("attempt to assign in read-only function");
+    };
+
+    std::any res = evalNode(*tree, resolver, assigner);
+    return flexi_cast<T>(res);
+  };
+}
+
+template <typename T>
+std::function<T(DynObject &)> makeFuncMutableImpl(const std::string &code) {
+  ExpressionSpec::Operators operators;
+  // TODO these are raw pointers that will never get cleaned. Since they are required in the
+  // function we return, to clean up we'd have to wrap std::function I think, which probably isn't
+  // worth it since we don't expect the function to be cleaned until the process ends
+  pegtl::string_input<> *expressionString = new pegtl::string_input<>(code, "source");
+  auto tree =
+    pegtl::parse_tree::parse<ExpressionSpec::Grammar, ExpressionSpec::Selector>(*expressionString, operators).release();
+
+  static std::map<std::string, AnyFunc> functions = {
+    { "length", [](const std::any& args) {
+      size_t length = flexi_cast<std::string>(args).length();
+      std::cout << "length " << flexi_cast<std::string>(args) << " - " << length << std::endl;
+      return length;
+    } },
+    { "size", [](const std::any& args) {
+      size_t size = flexi_cast<std::string>(args).length() + 1;
+      std::cout << "size " << flexi_cast<std::string>(args) << " - " << size << std::endl;
+      return size;
+    } },
+  };
+
+  std::map<uint64_t, std::vector<std::string>> variables;
+
+  return [tree, variables](DynObject &obj) mutable -> T {
+    ExpressionSpec::VariableResolver resolver = [&obj, &variables](const std::string &key, uint64_t id) -> std::any {
+      auto funcIter = functions.find(key);
+      if (funcIter != functions.end()) {
+        return funcIter->second;
+      }
+
+      auto varIter = variables.find(id);
+      if (varIter == variables.end()) {
+        variables.insert(std::pair<uint64_t, std::vector<std::string>>(id, splitVariable(key)));
+        // variables[id] = splitVariable(key);
+        varIter = variables.find(id);
+        // varIter = variables.insert(std::make_pair(id, splitVariable(key))).first;
+      }
+      // ObjectIndex *idx = obj.getIndex();
+      return obj.getAny(varIter->second.begin(), varIter->second.end());
+    };
+
+    ExpressionSpec::VariableAssigner assigner = [&obj, &variables](const std::string &key, const std::any &value) {
+      std::vector<std::string> keySegments = splitVariable(key);
+      ObjectIndex *idx = obj.getIndex();
+      return obj.setAny(keySegments.begin(), keySegments.end(), value);
+    };
+
+    std::any res = evalNode(*tree, resolver, assigner);
     return flexi_cast<T>(res);
   };
 }
@@ -446,4 +520,9 @@ inline std::function<ObjSize(const DynObject &)> makeFunc(const std::string &cod
   }
 
   return makeFuncImpl<ObjSize>(code);
+}
+
+template <typename T>
+inline std::function<T(DynObject &)> makeFuncMutable(const std::string &code) {
+  return makeFuncMutableImpl<T>(code);
 }

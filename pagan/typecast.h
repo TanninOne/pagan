@@ -20,7 +20,7 @@ public:
 // using an index, read the data
 template <typename T> T type_read(TypeId type, char *index, std::shared_ptr<IOWrapper> &data, std::shared_ptr<IOWrapper> &write);
 // using an index, write data
-template <typename T> char *type_write(TypeId type, char *index, std::shared_ptr<IOWrapper> &write, const T &value, const DynObject *obj);
+template <typename T> char *type_write(TypeId type, char *index, std::shared_ptr<IOWrapper> &write, const T &value);
 // create an index for data
 char *type_index(TypeId type, const SizeFunc &size, char *index, std::shared_ptr<IOWrapper> &data, const DynObject *obj);
 
@@ -28,10 +28,14 @@ char *type_index_obj(char *index, std::shared_ptr<IOWrapper> &data, std::streamp
 
 #define DECL_TYPE(VAL_TYPE) \
 template <> VAL_TYPE type_read(TypeId type, char *index, std::shared_ptr<IOWrapper> &data, std::shared_ptr<IOWrapper> &write);\
-template <> char *type_write(TypeId type, char *index, std::shared_ptr<IOWrapper> &write, const VAL_TYPE &value, const DynObject *obj);
+template <> char *type_write(TypeId type, char *index, std::shared_ptr<IOWrapper> &write, const VAL_TYPE &value);
 
 
 std::any type_read_any(TypeId type, char *index, std::shared_ptr<IOWrapper> &data, std::shared_ptr<IOWrapper> &write);
+
+char *type_write_any(TypeId type, char *index, std::shared_ptr<IOWrapper> &write, const std::any &value);
+
+void type_copy_any(TypeId type, char *index, std::shared_ptr<IOWrapper> &output, std::shared_ptr<IOWrapper> &data, std::shared_ptr<IOWrapper> &write);
 
 DECL_TYPE(int8_t);
 DECL_TYPE(int16_t);

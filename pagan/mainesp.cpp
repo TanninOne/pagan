@@ -41,9 +41,25 @@ int main(int argc, char **argv) {
     auto recList = obj.getList<DynObject>("root");
     std::cout << "# items at root: " << recList.size() << std::endl;
 
+    auto tes4 = std::find_if(recList.cbegin(), recList.cend(), [](const DynObject &obj) { return obj.get<std::string>("type") == "TES4"; });
+    std::cout << "header found: " << (tes4 != recList.cend()) << std::endl;
+    auto zrec = tes4->get<DynObject>("data").get<DynObject>("z_record").get<DynObject>("value");
+    auto fields = zrec.getList<DynObject>("fields");
+    auto cnam = std::find_if(fields.cbegin(), fields.cend(), [](const DynObject &obj) { return obj.get<std::string>("type") == "CNAM"; });
+    for (const auto &key : cnam->get<DynObject>("fields").getKeys()) {
+      std::cout << "cnam key " << key << std::endl;
+    }
+    std::cout << "- " << cnam->get<DynObject>("fields").get<std::string>("name") << std::endl;
+    // cnam->get<DynObject>("fields").set<std::string>("name", "foo");
+
+    /*
+    std::cout << "cnam: " << cnam->get<std::string>("type") << std::endl;
+
+    int32_t numRecords = header->get<int32_t>("num_records");
+    std::cout << "# total records: " << numRecords << std::endl;
+    */
+
     auto armorGroup = std::find_if(recList.cbegin(), recList.cend(), findGRUP("ARMO"));
-    armorGroup->debug(0);
-    armorGroup->get<DynObject>("data").debug(0);
     auto armorRecs = armorGroup->get<DynObject>("data").get<DynObject>("records").getList<DynObject>("entries");
 
     std::cout << "# armor recs: " << armorRecs.size() << std::endl;
@@ -52,18 +68,17 @@ int main(int argc, char **argv) {
 
     for (const auto &armor : armorRecs) {
       if (armor.get<std::string>("type") == "ARMO") {
-        armor.get<DynObject>("data").debug(1);
-        armor.get<DynObject>("data").get<DynObject>("header").debug(2);
-        armor.get<DynObject>("data").get<DynObject>("z_record").debug(2);
-        armor.get<DynObject>("data").get<DynObject>("z_record").get<DynObject>("value").debug(3);
+        // armor.get<DynObject>("data").debug(1);
+        // armor.get<DynObject>("data").get<DynObject>("header").debug(2);
+        // armor.get<DynObject>("data").get<DynObject>("z_record").debug(2);
+        // armor.get<DynObject>("data").get<DynObject>("z_record").get<DynObject>("value").debug(3);
         auto value = armor.get<DynObject>("data").get<DynObject>("z_record").get<DynObject>("value");
         auto fields = value.getList<DynObject>("fields");
         for (auto &field : fields) {
           std::string type = field.get<std::string>("type");
-          // std::cout << "field type " << type << std::endl;
           if (type == "MOD2") {
+            std::cout << "male model >" << field.get<std::string>("data") << "< - " << field.get<std::string>("data").length() << std::endl;
             field.set<std::string>("data", std::string("foobar"));
-//             std::cout << "male model " << field.get<std::string>("data") << std::endl;
           }
           else if (type == "MOD4") {
 //             std::cout << "female model " << field.get<std::string>("data") << std::endl;
@@ -76,27 +91,22 @@ int main(int argc, char **argv) {
           }
           else if (type == "OBND") {
             auto obnd = field.get<DynObject>("data");
-            /*
-            std::cout
-              << "Bounds: "
-              << obnd.get<int16_t>("x1") << "x" << obnd.get<int16_t>("y1") << "x" << obnd.get<int16_t>("z1")
-              << " - "
-              << obnd.get<int16_t>("x2") << "x" << obnd.get<int16_t>("y2") << "x" << obnd.get<int16_t>("z2")
-              << std::endl;
-              */
-          }
-          else {
-            // std::cout << "field type " << field.get<std::string>("type") << std::endl;
           }
         }
       }
     }
+
+    parser->write((std::string(argv[1]) + ".edited").c_str(), obj);
 
     return 0;
   }
   catch (const std::exception &e) {
     std::cerr << "TL exception: " << e.what() << std::endl;
     return 1;
+  }
+  catch (...) {
+    std::cerr << "unknown exception" << std::endl;
+    return 2;
   }
 }
 

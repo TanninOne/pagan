@@ -56,7 +56,7 @@ static ConditionFunc trueFunc = [](const DynObject &object) -> bool {
   return true;
 };
 
-static AssignCB nop = [] (DynObject &object, const std::any &value) {
+static AssignCB nop = [] (DynObject &object) {
 };
 
 class TypePropertyBuilder {
@@ -218,37 +218,9 @@ public:
 
   std::tuple<uint32_t, size_t> get(ObjectIndex *objIndex, const char *key) const;
 
-  std::tuple<uint32_t, size_t, SizeFunc, AssignCB> getFull(ObjectIndex *objIndex, const char *key) const {
-    size_t bitsetBytes = (m_Sequence.size() + 7) / 8;
-    size_t offset = sizeof(DataStreamId) + sizeof(DataOffset);
+  std::tuple<uint32_t, size_t, SizeFunc, AssignCB> getFull(ObjectIndex *objIndex, const char *key) const;
 
-    const uint8_t *bitmaskCur = objIndex->bitmask;
-    uint8_t bitmaskMask = 0x01;
-
-    int idx = 0;
-    int attributeOffset = 0;
-    auto iter = std::find_if(m_Sequence.cbegin(), m_Sequence.cend(), [&](const TypeProperty &prop) {
-      bool isPresent = isBitSet(objIndex, idx);
-      bool res = (prop.key == key) && isPresent;
-      if (!res) {
-        ++idx;
-        if (isPresent) {
-          if (prop.isList) {
-            // lists store the item count and offset into the array index here
-            attributeOffset += sizeof(ObjSize) * 2;
-          }
-          else {
-            attributeOffset += indexSize(prop.typeId);
-          }
-        }
-      }
-      return res;
-    });
-
-    offset += bitsetBytes + attributeOffset;
-
-    return std::tuple<uint32_t, size_t, SizeFunc, AssignCB>(iter->typeId, attributeOffset, iter->size, iter->onAssign);
-  }
+  std::vector<TypeProperty>::const_iterator propertyByKey(ObjectIndex *objIndex, const char *key, int *offset = nullptr) const;
 
   uint32_t getId() const {
     return m_Id;

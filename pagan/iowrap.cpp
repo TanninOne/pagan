@@ -6,8 +6,8 @@ IOWrapper *IOWrapper::memoryBuffer() {
   return new IOWrapper(new std::stringstream(), -1);
 }
 
-IOWrapper *IOWrapper::fromFile(const char *filePath) {
-  std::fstream *str = new std::fstream(filePath, std::ios::in | std::ios::binary);
+IOWrapper *IOWrapper::fromFile(const char *filePath, bool out) {
+  std::fstream *str = new std::fstream(filePath, (out ? std::ios::out : std::ios::in) | std::ios::binary);
   str->seekg(0, std::ios::end);
   std::streampos fileSize = str->tellg();
   str->seekg(0);
@@ -46,6 +46,6 @@ IOWrapper::~IOWrapper() {
     delete m_Stream;
   }
   if (m_Buffer != nullptr) {
-    delete m_Buffer;
+    delete [] m_Buffer;
   }
 }

@@ -4,7 +4,9 @@
 #include "typecast.h"
 #include "typespec.h"
 #include "util.h"
+#include "flexi_cast.h"
 #include <cstdint>
+#include <iostream>
 
 class DynObject
 {
@@ -27,7 +29,7 @@ public:
     , m_IndexTable(indexTable)
     , m_Parent(parent)
   {
-    m_ObjectIndex = indexTable->allocateObject(spec.lock(), -1, 0);
+    m_ObjectIndex = indexTable->allocateObject(spec, -1, 0);
 
     std::vector<T> out;
     std::copy(props.begin(), props.end(), std::back_inserter(out));
@@ -51,17 +53,121 @@ public:
 
   DynObject &operator=(DynObject &&) = default;
 
-  void debug(int indent) const {
+  void saveTo(std::shared_ptr<IOWrapper> file) {
+    for (auto prop : getKeys()) {
+      int propertyOffset;
+      auto iter = m_Spec->propertyByKey(m_ObjectIndex, prop.c_str(), &propertyOffset);
+
+      uint8_t *propBuffer = m_ObjectIndex->properties + propertyOffset;
+      uint32_t typeId = iter->typeId;
+
+      if (typeId == TypeId::runtime) {
+        typeId = *reinterpret_cast<uint32_t*>(propBuffer);
+        propBuffer += sizeof(uint32_t);
+      }
+
+      if (!iter->isList) {
+        savePropTo(file, typeId, propBuffer);
+      } else {
+        size_t offset;
+        uint32_t typeId;
+
+        std::tie(typeId, offset) = m_Spec->get(m_ObjectIndex, prop.c_str());
+
+        union {
+          struct {
+            ObjSize count;
+            ObjSize offset;
+          } arrayProp;
+          uint64_t buff;
+        };
+
+        buff = *reinterpret_cast<uint64_t*>(m_ObjectIndex->properties + offset);
+
+        uint8_t *arrayPtr = m_IndexTable->arrayAddress(arrayProp.offset);
+
+        uint8_t *arrayData = m_IndexTable->arrayAddress(arrayProp.offset);
+        uint8_t *arrayCur = arrayData;
+
+        for (int i = 0; i < arrayProp.count; ++i) {
+          savePropTo(file, typeId, arrayCur);
+          if (typeId >= TypeId::custom) {
+            arrayCur += sizeof(int64_t);
+          }
+        }
+      }
+    }
+  }
+
+  void savePropTo(std::shared_ptr<IOWrapper> file, uint32_t typeId, uint8_t *propBuffer) {
+    if (typeId >= TypeId::custom) {
+      int64_t objOffset = *reinterpret_cast<const int64_t*>(propBuffer);
+      std::shared_ptr<TypeSpec> type(m_Spec->getRegistry()->getById(typeId));
+
+      if (!type) {
+        throw IncompatibleType(fmt::format("type id not found in registry {}", typeId).c_str());
+      }
+
+      DynObject obj = getObjectAtOffset(type, objOffset, propBuffer);
+      obj.saveTo(file);
+    }
+    else {
+      std::shared_ptr<IOWrapper> dataStream = m_Streams.get(m_ObjectIndex->dataStream);
+      std::shared_ptr<IOWrapper> writeStream = m_Streams.getWrite();
+      type_copy_any(static_cast<TypeId>(typeId), reinterpret_cast<char*>(propBuffer), file, dataStream, writeStream);
+    }
+  }
+
+  void debug(size_t indent) const {
     int idx = 0;
 
     std::string sStr;
     sStr.resize(indent * 2, ' ');
 
     for (auto prop : getKeys()) {
-      size_t offset;
-      uint32_t typeId;
+      int propertyOffset;
+      auto iter = m_Spec->propertyByKey(m_ObjectIndex, prop.c_str(), &propertyOffset);
+      std::cout << "attribute offset " << propertyOffset << std::endl;
 
-      std::tie(typeId, offset) = m_Spec->get(m_ObjectIndex, prop.c_str());
+      uint8_t *propBuffer = m_ObjectIndex->properties + propertyOffset;
+      uint32_t typeId = iter->typeId;
+
+      std::cout << "list: " << iter->isList << " - " << typeId << std::endl;
+
+      if (iter->isList) {
+        std::cout << sStr << " " << prop << "..." << std::endl;
+        continue;
+      }
+
+      if (typeId == TypeId::runtime) {
+        typeId = *reinterpret_cast<uint32_t*>(propBuffer);
+        propBuffer += sizeof(uint32_t);
+      }
+
+      if (typeId >= TypeId::custom) {
+        int64_t objOffset = *reinterpret_cast<const int64_t*>(propBuffer);
+        std::shared_ptr<TypeSpec> type(m_Spec->getRegistry()->getById(typeId));
+
+        if (!type) {
+          throw IncompatibleType(fmt::format("type id not found in registry {}", typeId).c_str());
+        }
+
+        getObjectAtOffset(type, objOffset, propBuffer).debug(indent + 1);
+      }
+      else {
+        std::cout << "pod " << m_ObjectIndex->dataStream << " - " << std::endl;
+        std::shared_ptr<IOWrapper> dataStream = m_Streams.get(m_ObjectIndex->dataStream);
+        std::shared_ptr<IOWrapper> writeStream = m_Streams.getWrite();
+
+        std::any val = type_read_any(static_cast<TypeId>(typeId), reinterpret_cast<char*>(propBuffer), dataStream, writeStream);
+
+        try {
+          std::cout << sStr << " " << prop << " = " << flexi_cast<std::string>(val) << std::endl;
+        }
+        catch (const std::bad_any_cast&) {
+          std::cout << sStr << " " << prop << " = unknown" << std::endl;
+        }
+      }
     }
   }
 
@@ -114,6 +220,10 @@ public:
 
   std::any getAny(const std::vector<std::string>::const_iterator &cur, const std::vector<std::string>::const_iterator &end) const;
 
+  void setAny(const std::vector<std::string>::const_iterator &cur,
+              const std::vector<std::string>::const_iterator &end,
+              const std::any &value);
+
   template <typename T> T get(const char *key) const;
 
   template <typename T> std::vector<T> getList(const char *key) const;
@@ -129,6 +239,12 @@ public:
     AssignCB onAssign;
     
     std::tie(typeId, offset, size, onAssign) = m_Spec->getFull(m_ObjectIndex, key);
+    uint8_t *propBuffer = m_ObjectIndex->properties + offset;
+
+    if (typeId == TypeId::runtime) {
+      typeId = *reinterpret_cast<uint32_t*>(propBuffer);
+      propBuffer += sizeof(uint32_t);
+    }
 
     if (typeId >= TypeId::custom) {
       throw IncompatibleType("expected POD");
@@ -136,8 +252,8 @@ public:
 
     LOG_F("write at index {0:x} + {1}", (int64_t)m_ObjectIndex->properties, offset);
 
-    onAssign(*this, value);
-    type_write(static_cast<TypeId>(typeId), reinterpret_cast<char*>(m_ObjectIndex->properties + offset), write, value, this);
+    type_write(static_cast<TypeId>(typeId), reinterpret_cast<char*>(propBuffer), write, value);
+    onAssign(*this);
   }
 
   template <typename T> void setList(const char *key, const std::vector<T> &value);
@@ -252,11 +368,12 @@ inline std::vector<DynObject> DynObject::getList(const char *key) const {
 
   std::tie(typeId, offset) = m_Spec->get(m_ObjectIndex, key);
   LOG_F("(3) key {0} offset {1}", key, offset);
-  if (typeId < TypeId::custom) {
+
+  // if it's a runtime type the concrete type is stored with each item individually
+  // so we can't currently determine if the type at runtime is actually valid
+  if ((typeId < TypeId::custom) && (typeId != TypeId::runtime)) {
     throw IncompatibleType(fmt::format("expected custom list, got {}", typeId).c_str());
   }
-
-  std::shared_ptr<TypeSpec> type(m_Spec->getRegistry()->getById(typeId));
 
   std::shared_ptr<IOWrapper> writeStream = m_Streams.getWrite();
 
@@ -276,7 +393,14 @@ inline std::vector<DynObject> DynObject::getList(const char *key) const {
 
   std::vector<DynObject> res;
   for (int i = 0; i < arrayProp.count; ++i) {
+    uint32_t itemType = typeId;
+    if (itemType == TypeId::runtime) {
+      itemType = *reinterpret_cast<uint32_t*>(arrayCur);
+      arrayCur += sizeof(uint32_t);
+    }
     int64_t objOffset = *reinterpret_cast<int64_t*>(arrayCur);
+
+    std::shared_ptr<TypeSpec> type(m_Spec->getRegistry()->getById(itemType));
     res.push_back(getObjectAtOffset(type, objOffset, arrayCur));
     arrayCur += sizeof(int64_t);
   }
@@ -291,7 +415,7 @@ inline std::vector<T> DynObject::getList(const char *key) const {
   size_t offset;
   uint32_t typeId;
 
-  std::tie(typeId, offset) = m_Spec.lock()->get(m_ObjectIndex, key);
+  std::tie(typeId, offset) = m_Spec->get(m_ObjectIndex, key);
   LOG_F("(2) key {0} offset {1}", key, offset);
   if (typeId >= TypeId::custom) {
     throw IncompatibleType("Expected POD");
@@ -383,7 +507,7 @@ inline void DynObject::setList(const char *key, const std::vector<T> &value) {
   SizeFunc size;
   AssignCB onAssign;
 
-  std::tie(typeId, offset, size, onAssign) = m_Spec.lock()->getFull(m_ObjectIndex, key);
+  std::tie(typeId, offset, size, onAssign) = m_Spec->getFull(m_ObjectIndex, key);
 
   if (typeId >= TypeId::custom) {
     throw IncompatibleType("Expected POD");

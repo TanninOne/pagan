@@ -15,7 +15,7 @@ void TypeSpec::writeIndex(ObjectIndexTable *indexTable, ObjectIndex *objIndex, s
   // TODO: this should be the id of the data stream 
   DataStreamId dataStream = 0;
   DataOffset dataOffset = data->tellg();
-  // auto bracket = LogBracket::create(fmt::format("write index for obj type {} data {} size {}", m_Name, dataOffset, m_IndexSize));
+  auto bracket = LogBracket::create(fmt::format("write index for obj type {} data {} size {}", m_Name, dataOffset, m_IndexSize));
 
   // second: the bitmask reflecting which attributes are present
   //   for now this is all zeros because we don't actually know yet
@@ -37,6 +37,7 @@ void TypeSpec::writeIndex(ObjectIndexTable *indexTable, ObjectIndex *objIndex, s
 
   // third: create properties index
   for (size_t i = 0; i < m_Sequence.size(); ++i) {
+    LOG_F("index seq {0}/{1}", i, m_Sequence.size());
     int imod8 = i % 8;
     // LogBracket::log(fmt::format("seq {0} {1} {2:x} (vs {3:x})", i, m_Sequence[i].key, reinterpret_cast<int64_t>(propertiesEnd), reinterpret_cast<int64_t>(buffer)));
     TypeProperty &prop = m_Sequence[i];
@@ -63,31 +64,39 @@ void TypeSpec::writeIndex(ObjectIndexTable *indexTable, ObjectIndex *objIndex, s
   indexTable->setProperties(objIndex, buffer, propertiesEnd - buffer);
 }
 
+std::vector<TypeProperty>::const_iterator TypeSpec::propertyByKey(ObjectIndex *objIndex, const char *key, int *offset) const {
+  if (offset != nullptr) {
+    *offset = 0;
+  }
+  int idx = 0;
+  return std::find_if(m_Sequence.cbegin(), m_Sequence.cend(), [&idx, objIndex, key, offset, this](const TypeProperty &prop) {
+    bool isPresent = isBitSet(objIndex, idx);
+    bool res = (prop.key == key) && isPresent;
+    if (!res) {
+      ++idx;
+      if (isPresent && (offset != nullptr)) {
+        if (prop.isList) {
+          // lists store the item count and offset into the array index here
+          *offset += sizeof(ObjSize) * 2;
+        }
+        else {
+          *offset += indexSize(prop.typeId);
+        }
+      }
+    }
+    return res;
+  });
+}
+
 std::tuple<uint32_t, size_t> TypeSpec::get(ObjectIndex * objIndex, const char *key) const {
-  int attributeOffset = 0;
+  int propertyOffset = 0;
 
   size_t bitsetBytes = (m_Sequence.size() + 7) / 8;
   size_t offset = sizeof(DataStreamId) + sizeof(DataOffset);
 
   int idx = 0;
 
-  auto iter = std::find_if(m_Sequence.cbegin(), m_Sequence.cend(), [&idx, objIndex, key, &attributeOffset, this](const TypeProperty &prop) {
-    bool isPresent = isBitSet(objIndex, idx);
-    bool res = (prop.key == key) && isPresent;
-    if (!res) {
-      ++idx;
-      if (isPresent) {
-        if (prop.isList) {
-          // lists store the item count and offset into the array index here
-          attributeOffset += sizeof(ObjSize) * 2;
-        }
-        else {
-          attributeOffset += indexSize(prop.typeId);
-        }
-      }
-    }
-    return res;
-    }); 
+  auto iter = propertyByKey(objIndex, key, &propertyOffset);
 
   if (iter == m_Sequence.cend()) {
     throw std::runtime_error(fmt::format("Property not found: {0}", key));
@@ -97,9 +106,23 @@ std::tuple<uint32_t, size_t> TypeSpec::get(ObjectIndex * objIndex, const char *k
     throw std::runtime_error(fmt::format("Property not set: {0}", key));
   }
 
-  // offset += bitsetBytes + attributeOffset;
+  return std::tuple<uint32_t, size_t>(iter->typeId, propertyOffset);
+}
 
-  return std::tuple<uint32_t, size_t>(iter->typeId, attributeOffset);
+std::tuple<uint32_t, size_t, SizeFunc, AssignCB> TypeSpec::getFull(ObjectIndex * objIndex, const char * key) const {
+  size_t bitsetBytes = (m_Sequence.size() + 7) / 8;
+  size_t offset = sizeof(DataStreamId) + sizeof(DataOffset);
+
+  const uint8_t *bitmaskCur = objIndex->bitmask;
+  uint8_t bitmaskMask = 0x01;
+
+  int idx = 0;
+  int propertyOffset = 0;
+  auto iter = propertyByKey(objIndex, key, &propertyOffset);
+
+  offset += bitsetBytes + propertyOffset;
+
+  return std::tuple<uint32_t, size_t, SizeFunc, AssignCB>(iter->typeId, propertyOffset, iter->size, iter->onAssign);
 }
 
 uint8_t *TypeSpec::indexCustom(const TypeProperty &prop, uint32_t typeId,
@@ -200,8 +223,7 @@ auto TypeSpec::makeIndexFunc(const TypeProperty &prop,
       LOG_F("index custom type {}", prop.typeId);
       return this->indexCustom(prop, prop.typeId, streams, indexTable, index, obj, dataStream, data, streamLimit);
     };
-  }
-  else {
+  } else {
     // index pod
     return [=](uint8_t *index, DynObject *obj, DataStreamId dataStream, std::shared_ptr<IOWrapper> data, std::streampos streamLimit) -> uint8_t* {
       LOG_F("index pod type {}", prop.typeId);
