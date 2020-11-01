@@ -198,10 +198,19 @@ auto TypeSpec::makeIndexFunc(const TypeProperty &prop,
                              -> IndexFunc {
   if (prop.typeId == TypeId::runtime) {
     return [this, prop, indexTable, streams](uint8_t *index, DynObject *obj, DataStreamId dataStream, std::shared_ptr<IOWrapper> data, std::streampos streamLimit) -> uint8_t* {
-      std::string caseId = prop.switchFunc(*obj);
+      std::variant<std::string, int32_t> caseId = prop.switchFunc(*obj);
       auto iter = prop.switchCases.find(caseId);
       if (iter == prop.switchCases.end()) {
         iter = prop.switchCases.find("_");
+      }
+      if (iter == prop.switchCases.end()) {
+        try {
+          throw std::runtime_error(fmt::format("Invalid switch case {0}", std::get<std::string>(caseId)));
+        }
+        catch (...) {
+          throw std::runtime_error(fmt::format("Invalid switch case {0}", std::get<int32_t>(caseId)));
+
+        }
       }
       uint32_t typeId = iter->second;
       LOG_F("index runtime type: {}", typeId);
@@ -250,6 +259,12 @@ TypePropertyBuilder &TypePropertyBuilder::withCondition(ConditionFunc func) {
   return *this;
 }
 
+TypePropertyBuilder& TypePropertyBuilder::withValidation(ValidationFunc func) {
+  m_Wrappee->validation = func;
+  m_Wrappee->isValidated = true;
+  return *this;
+}
+
 TypePropertyBuilder &TypePropertyBuilder::withSize(SizeFunc func) {
   m_Wrappee->size = func;
   m_Wrappee->hasSizeFunc = true;
@@ -268,7 +283,7 @@ TypePropertyBuilder &TypePropertyBuilder::withCount(SizeFunc func) {
   return *this;
 }
 
-TypePropertyBuilder &TypePropertyBuilder::withTypeSwitch(SwitchFunc func, const std::map<std::string, uint32_t> &cases) {
+TypePropertyBuilder &TypePropertyBuilder::withTypeSwitch(SwitchFunc func, const std::map<std::variant<std::string, int32_t>, uint32_t> &cases) {
   m_Wrappee->switchFunc = func;
   m_Wrappee->switchCases = cases;
   m_Wrappee->isSwitch = true;

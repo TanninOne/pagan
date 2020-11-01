@@ -190,6 +190,7 @@ template <> char *type_index_impl<std::string>(char *index, std::shared_ptr<IOWr
 
   if (sizeField) {
     int32_t size = sizeFunc(*obj);
+    /*
     char temp[5];
     std::streampos pos = data->tellg();
     data->read(temp, 4);
@@ -207,7 +208,8 @@ template <> char *type_index_impl<std::string>(char *index, std::shared_ptr<IOWr
     }
     lastStr = temp;
     lastPos = pos;
-    data->seekg(offset + size);
+    */
+    data->seekg(static_cast<std::streamoff>(offset + size));
     memcpy(index + sizeof(int32_t), &size, sizeof(int32_t));
     index += sizeof(int32_t) * 2;
   } else {

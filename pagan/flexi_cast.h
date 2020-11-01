@@ -74,3 +74,9 @@ template<typename T>
 T flexi_cast(const std::any &input) {
   return flexi_cast_impl<T>(input, std::is_integral<T>());
 }
+
+template<>
+inline std::any flexi_cast(const std::any& input) {
+  return input;
+}
+

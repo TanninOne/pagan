@@ -180,6 +180,8 @@
     <ClCompile Include="format.cc" />
     <ClCompile Include="iowrap.cpp" />
     <ClCompile Include="mainesp.cpp" />
+    <ClCompile Include="mainrar.cpp" />
+    <ClCompile Include="mainzip.cpp" />
     <ClCompile Include="objectindex.cpp" />
     <ClCompile Include="ObjectIndexTable.cpp" />
     <ClCompile Include="Parser.cpp" />

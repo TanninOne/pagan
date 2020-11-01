@@ -327,7 +327,7 @@ inline DynObject DynObject::get(const char *key) const {
     throw IncompatibleType(fmt::format("type id not found in registry {}", typeId).c_str());
   }
 
-  LOG_F("child object {} type {} - offset {}", key, type->getName(), objOffset);
+  // LOG_F("child object {} type {} - offset {}", key, type->getName(), objOffset);
 
   return getObjectAtOffset(type, objOffset, propBuffer);
 }
@@ -335,6 +335,10 @@ inline DynObject DynObject::get(const char *key) const {
 
 template<typename T>
 inline T DynObject::get(const char *key) const {
+  if (m_Spec->hasComputed(key)) {
+    return flexi_cast<T>(m_Spec->compute(key, this));
+  }
+
   size_t offset;
   uint32_t typeId;
 
@@ -354,8 +358,6 @@ inline T DynObject::get(const char *key) const {
   std::shared_ptr<IOWrapper> dataStream = m_Streams.get(m_ObjectIndex->dataStream);
   std::shared_ptr<IOWrapper> writeStream = m_Streams.getWrite();
   
-  LOG_F("get {}", key);
-
   return type_read<T>(static_cast<TypeId>(typeId), reinterpret_cast<char*>(propBuffer), dataStream, writeStream);
 }
 

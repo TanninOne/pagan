@@ -30,6 +30,20 @@ DynObject Parser::getObject(const std::shared_ptr<TypeSpec> &spec, size_t offset
   return res;
 }
 
+std::vector<DynObject> Parser::getList(const std::shared_ptr<TypeSpec>& spec, size_t offset, DataStreamId dataStream) {
+  std::shared_ptr<IOWrapper> stream = m_StreamRegistry.get(dataStream);
+
+  // DynObject(const std::shared_ptr<TypeSpec> &spec, const StreamRegistry &streams, ObjectIndexTable *indexTable, ObjectIndex *index, const DynObject *parent)
+  std::shared_ptr<TypeSpec> dummySpec(new TypeSpec("dummy", m_TypeRegistry.get()));
+  dummySpec->appendProperty("root", spec->getId())
+    .withRepeatToEOS();
+  ObjectIndex *rootIndex = m_IndexTable.allocateObject(dummySpec, dataStream, offset);
+  DynObject dummy(dummySpec, m_StreamRegistry, &m_IndexTable, rootIndex, nullptr);
+  dummy.writeIndex(offset, stream->size(), true);
+
+  return dummy.getList<DynObject>("root");
+}
+
 std::shared_ptr<TypeSpec> Parser::getType(const char *name) const {
   return m_TypeRegistry->getByName(name);
 }

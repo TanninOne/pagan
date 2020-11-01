@@ -31,7 +31,14 @@ static const inline std::map<std::type_index, std::function<bool(const std::any 
   { typeid(short), equal<short> },
   { typeid(int), equal<int> },
   { typeid(long), equal<long> },
+  { typeid(int8_t), equal<int8_t> },
+  { typeid(int16_t), equal<int16_t> },
+  { typeid(int32_t), equal<int32_t> },
   { typeid(int64_t), equal<int64_t> },
+  { typeid(uint8_t), equal<uint8_t> },
+  { typeid(uint16_t), equal<uint16_t> },
+  { typeid(uint32_t), equal<uint32_t> },
+  { typeid(uint64_t), equal<uint64_t> },
   { typeid(std::string), strEqual },
 };
 
@@ -262,8 +269,12 @@ namespace ExpressionSpec {
   struct Identifier : seq<sor<alpha, one<'_'>>, star<sor<alnum, one<'.'>, one<'_'>>>> {};
   struct Expression;
   struct Function;
+  struct Not;
+  struct Ternary;
   struct Bracket : if_must<one<'('>, Expression, one<')'>> {};
-  struct Atomic : sor<HexNumber, Number, String, Function, Identifier, Bracket> {};
+  struct Atomic : sor<HexNumber, Not, Number, String, Ternary, Function, Identifier, Bracket> {};
+  struct Ternary : seq<Identifier, star<Ignored>, one<'?'>, star<Ignored>, Number, star<Ignored>, one<':'>, star<Ignored>, Number> {};
+  struct Not : seq<sor<istring<'n', 'o', 't', ' '>, one<'!'>>, Atomic> {};
   struct Assignment : seq<Identifier, star<Ignored>, one<'='>, star<Ignored>, Expression> {};
   struct Function : seq<Identifier, one<'('>, Atomic, one<')'>> {};
   struct Expression : list<Atomic, Infix, Ignored> {};
@@ -271,6 +282,16 @@ namespace ExpressionSpec {
 
   template<typename Rule>
   struct Action : pegtl::nothing<Rule> {};
+
+  template <>
+  struct Action<Not>
+  {
+    template<typename Input>
+    static void apply(const Input& input, const Operators&, Stacks& stacks, const VariableResolver&)
+    {
+      stacks.push(!std::stol(input.string()));
+    }
+  };
 
   template <>
   struct Action<Number>
@@ -334,7 +355,7 @@ namespace ExpressionSpec {
   template <typename Rule>
   using Selector = pegtl::parse_tree::selector<
     Rule,
-    pegtl::parse_tree::apply_store_content::to<Number, HexNumber, String, Identifier, Function, Infix>,
+    pegtl::parse_tree::apply_store_content::to<Number, HexNumber, String, Identifier, Ternary, Function, Infix>,
     pegtl::parse_tree::apply_remove_content::to<>,
     pegtl::parse_tree::apply<Rearrange>::to<Expression>
   >;
@@ -342,7 +363,6 @@ namespace ExpressionSpec {
 
 static void printNode(const pegtl::parse_tree::node &node, const std::string &indent = "") {
   if (node.is_root()) {
-    std::cout << "root" << std::endl;
   } else {
     if (node.has_content()) { 
       std::cout << indent << node.id->name() << " \"" << node.content() << "\" at " << node.begin() << " to " << node.end() << " - " << node.is<ExpressionSpec::Infix>() << std::endl;
@@ -381,7 +401,7 @@ static std::map<std::string, std::function<std::any(const std::any&, const std::
 };
 
 
-static std::any evalNode(const pegtl::parse_tree::node &node, const ExpressionSpec::VariableResolver &resolver, const ExpressionSpec::VariableAssigner &assigner) {
+static std::any evalNode(const pegtl::parse_tree::node& node, const ExpressionSpec::VariableResolver& resolver, const ExpressionSpec::VariableAssigner& assigner) {
   if (node.is_root()) {
     std::any res = evalNode(**node.children.rbegin(), resolver, assigner);
     if (node.children.size() == 2) {
@@ -389,7 +409,7 @@ static std::any evalNode(const pegtl::parse_tree::node &node, const ExpressionSp
       std::string var = flexi_cast<std::string>(varAny);
       assigner(var, res);
     }
-    
+
     return res;
   }
   else if (node.is<ExpressionSpec::Infix>()) {
@@ -398,6 +418,8 @@ static std::any evalNode(const pegtl::parse_tree::node &node, const ExpressionSp
     std::any lhs = evalNode(*(node.children.at(0)), resolver, assigner);
     std::any rhs = evalNode(*(node.children.at(1)), resolver, assigner);
     return (iter->second)(lhs, rhs);
+  } else if (node.is<ExpressionSpec::Ternary>()) {
+    return std::any();
   } else if (node.is<ExpressionSpec::Function>()) {
     std::any arg = evalNode(*(node.children.at(1)), resolver, assigner);
     AnyFunc func = std::any_cast<AnyFunc>(evalNode(*(node.children.at(0)), resolver, assigner));

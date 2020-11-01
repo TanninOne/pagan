@@ -23,7 +23,7 @@ std::function<bool(const DynObject&)> findGRUP(const char *groupName) {
   };
 }
 
-int main(int argc, char **argv) {
+int mainx(int argc, char **argv) {
   try {
     // set up data streams
     std::shared_ptr<Parser> parser = parserFromKSY("esp.ksy");

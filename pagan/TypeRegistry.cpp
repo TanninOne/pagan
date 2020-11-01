@@ -25,6 +25,7 @@ std::shared_ptr<TypeSpec> TypeRegistry::create(const char *name) {
 
 std::shared_ptr<TypeSpec> TypeRegistry::create(const char *name, const std::initializer_list<TypeAttribute>& attributes) {
   std::shared_ptr<TypeSpec> res = create(name);
+  LOG_BRACKET_F("create type {0} - {1}", name, res->getId());
   for (auto attr : attributes) {
     res->appendProperty(attr.key, attr.type);
   }

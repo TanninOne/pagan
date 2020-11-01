@@ -8,6 +8,7 @@
 #include <functional>
 #include <any>
 #include <cassert>
+#include <variant>
 #include "types.h"
 #include "typecast.h"
 #include "typeregistry.h"
@@ -32,16 +33,18 @@ struct TypeProperty {
   uint32_t typeId;
   SizeFunc size;
   SizeFunc count;
+  ValidationFunc validation;
   ConditionFunc condition;
   AssignCB onAssign;
   bool isList;
   bool isConditional;
+  bool isValidated;
   bool hasSizeFunc;
   bool isSwitch;
   std::string processing;
   IndexFunc index;
   SwitchFunc switchFunc;
-  std::map<std::string, uint32_t> switchCases;
+  std::map<std::variant<std::string, int32_t>, uint32_t> switchCases;
 };
 
 static SizeFunc nullSize = [] (const DynObject &object) -> ObjSize {
@@ -53,6 +56,10 @@ static SizeFunc eosCount = [] (const DynObject &object) -> ObjSize {
 };
 
 static ConditionFunc trueFunc = [](const DynObject &object) -> bool {
+  return true;
+};
+
+static ValidationFunc validFunc = [](const std::any& value) -> bool {
   return true;
 };
 
@@ -70,9 +77,10 @@ public:
   TypePropertyBuilder &withSize(SizeFunc func);
   TypePropertyBuilder &withRepeatToEOS();
   TypePropertyBuilder &withCount(SizeFunc func);
-  TypePropertyBuilder &withTypeSwitch(SwitchFunc func, const std::map<std::string, uint32_t> &cases);
+  TypePropertyBuilder &withTypeSwitch(SwitchFunc func, const std::map<std::variant<std::string, int32_t>, uint32_t> &cases);
   TypePropertyBuilder &onAssign(AssignCB func);
   TypePropertyBuilder &withProcessing(const std::string &algorithm);
+  TypePropertyBuilder &withValidation(ValidationFunc func);
 
 private:
   TypeProperty *m_Wrappee;
@@ -111,7 +119,7 @@ public:
 
   TypePropertyBuilder appendProperty(const char *key, uint32_t type) {
     LOG_F("append prop to {0} - {1} size index {2}, size data {3}", m_Id, key, m_IndexSize, m_StaticSize);
-    m_Sequence.push_back({ key, type, nullSize, nullSize, trueFunc, nop, false, false, false });
+    m_Sequence.push_back({ key, type, nullSize, nullSize, validFunc, trueFunc, nop, false, false, false, false });
     TypeProperty *prop = &*m_Sequence.rbegin();
     return TypePropertyBuilder(prop, [this, type, prop]() {
       m_IndexSize += prop->isList ? (sizeof(ObjSize) * 2) : indexSize(type);
@@ -127,6 +135,11 @@ public:
 
   TypePropertyBuilder appendProperty(const char *key, TypeId type) {
     return appendProperty(key, static_cast<uint32_t>(type));
+  }
+
+  void addComputed(const char* key, ComputeFunc func) {
+    LOG_F("add computed {0} - {1}", m_Id, key);
+    m_Computed[key] = func;
   }
 
   int32_t getStaticSize() const {
@@ -216,6 +229,14 @@ public:
     return m_Sequence;
   }
 
+  bool hasComputed(const char* key) const {
+    return m_Computed.find(key) != m_Computed.end();
+  }
+
+  std::any compute(const char* key, const DynObject* obj) const {
+    return m_Computed.at(key)(*obj);
+  }
+
   std::tuple<uint32_t, size_t> get(ObjectIndex *objIndex, const char *key) const;
 
   std::tuple<uint32_t, size_t, SizeFunc, AssignCB> getFull(ObjectIndex *objIndex, const char *key) const;
@@ -288,7 +309,6 @@ private:
 
     if (typeId < TypeId::custom) {
       m_StaticSize += indexSize(typeId);
-      LOG_F("pod size {0} now {1}", typeId, m_StaticSize);
     }
     else {
       int32_t size = m_Registry->getById(typeId)->getStaticSize();
@@ -318,6 +338,7 @@ private:
   std::string m_Name;
   TypeRegistry *m_Registry;
   std::vector<TypeProperty> m_Sequence;
+  std::map<std::string, ComputeFunc> m_Computed;
   uint16_t m_IndexSize{0};
   uint32_t m_Id;
   int32_t m_StaticSize;

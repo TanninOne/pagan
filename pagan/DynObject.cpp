@@ -8,6 +8,11 @@ std::any DynObject::getAny(char *key) const {
     DynObject obj = get<DynObject>(key);
     return obj.getAny(&key[dotOffset + 1]);
   }
+
+  if (m_Spec->hasComputed(key)) {
+    return m_Spec->compute(key, this);
+  }
+
   // else: this is the "final" or "leaf" key
   size_t offset;
   uint32_t typeId;
@@ -37,6 +42,10 @@ std::any DynObject::getAny(const std::vector<std::string>::const_iterator &cur, 
   if (cur + 1 != end) {
     DynObject obj = get<DynObject>(cur->c_str());
     return obj.getAny(cur + 1, end);
+  }
+
+  if (m_Spec->hasComputed(cur->c_str())) {
+    return m_Spec->compute(cur->c_str(), this);
   }
 
   // else: this is the "final" or "leaf" key

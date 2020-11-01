@@ -18,6 +18,7 @@ public:
   std::shared_ptr<TypeSpec> getType(const char *name) const;
 
   DynObject getObject(const std::shared_ptr<TypeSpec> &spec, size_t offset, DataStreamId dataStream = 0);
+  std::vector<DynObject> getList(const std::shared_ptr<TypeSpec> &spec, size_t offset, DataStreamId dataStream = 0);
 
   template <typename T>
   DynObject createObject(const std::weak_ptr<TypeSpec> &spec, std::initializer_list<T> data);

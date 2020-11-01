@@ -52,7 +52,7 @@ std::string LogBracket::indent() {
   std::string sStr;
   int xCount = s_Indent / 10;
   int sCount = s_Indent % 10;
-  xStr.resize(xCount * 2, 'X');
-  sStr.resize(sCount * 2, ' ');
+  xStr.resize(static_cast<size_t>(xCount) * 2, 'X');
+  sStr.resize(static_cast<size_t>(sCount) * 2, ' ');
   return xStr + sStr;
 }
