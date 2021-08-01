@@ -14,7 +14,7 @@ std::shared_ptr<TypeSpec> TypeRegistry::create(const char *name) {
     return m_Types[existing->second];
   }
   uint32_t typeId = nextId();
-  std::shared_ptr<TypeSpec> res(new TypeSpec(name, this));
+  std::shared_ptr<TypeSpec> res(new TypeSpec(name, typeId, this));
   if (m_Types.size() < typeId) {
     m_Types.resize(m_Types.size() * 2);
   }

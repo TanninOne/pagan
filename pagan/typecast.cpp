@@ -4,6 +4,7 @@
 #include "dynobject.h"
 #include <iostream>
 #include <cassert>
+#include <windows.h>
 
 #define DEF_TYPE(VAL_TYPE, TYPE_ID) \
 template <> VAL_TYPE type_read(TypeId type, char *index, std::shared_ptr<IOWrapper> &data, std::shared_ptr<IOWrapper> &write) { \
@@ -158,13 +159,16 @@ void type_write(TypeId type, std::shared_ptr<IOWrapper> &index, std::shared_ptr<
 }
 */
 
-template <typename T> char *type_index_impl(char *index, std::shared_ptr<IOWrapper> &data, const SizeFunc &size, const DynObject *obj, bool sizeField);
+template <typename T> char *type_index_impl(char *index, std::shared_ptr<IOWrapper> &data, const SizeFunc &size, const DynObject *obj, bool sizeField, const std::string &debug);
 
-template <typename T> char *type_index_num(char *index, std::shared_ptr<IOWrapper> &data) {
+template <typename T> char *type_index_num(char *index, std::shared_ptr<IOWrapper> &data, const std::string &debug) {
   try {
     data->read(index, sizeof(T));
     T x = *reinterpret_cast<T*>(index);
     LOG_F("indexed num {} at {}", *reinterpret_cast<T*>(index), data->tellg() - sizeof(T), x);
+    if (!debug.empty()) {
+      std::cout << debug << ": " << x << "\n";
+    }
     return index + sizeof(T);
   }
   catch (const std::exception&) {
@@ -180,36 +184,61 @@ char *type_index_obj(char *index, std::shared_ptr<IOWrapper> &data, std::streamp
   return index + sizeof(int64_t);
 }
 
-template <> char *type_index_impl<std::string>(char *index, std::shared_ptr<IOWrapper> &data, const SizeFunc &sizeFunc, const DynObject *obj, bool sizeField) {
+template <> char *type_index_impl<std::string>(char *index, std::shared_ptr<IOWrapper> &data, const SizeFunc &sizeFunc, const DynObject *obj, bool sizeField, const std::string &debug) {
   int32_t offset = static_cast<int32_t>(data->tellg());
   if (offset < 0) {
     throw new std::runtime_error("invalid data offset");
   }
 
+  static bool paused = false;
+
+  /*
+  if ((offset > 16000000) && !paused) {
+    std::cout << "paused" << std::endl;
+    paused = true;
+    ::Sleep(10000);
+  }
+  */
+
   memcpy(index, &offset, sizeof(int32_t));
 
   if (sizeField) {
     int32_t size = sizeFunc(*obj);
-    /*
-    char temp[5];
-    std::streampos pos = data->tellg();
-    data->read(temp, 4);
-    temp[4] = '\0';
-    static std::string lastStr;
-    static std::streampos lastPos;
 
-    if ((size == 4)
+    /*
+    if (!debug.empty()) {
+      std::string content(static_cast<size_t>(size + 1), '\0');
+      data->read(&content[0], size);
+      std::cout << debug << ": " << content << "\n";
+
+      if ((size == 4)
+        && ((content[3] < 'A') || (content[3] > 'Z'))
+        && ((content[3] < '0') || (content[3] > '9'))
+        && (content[3] != '_')) {
+        throw std::exception("invalid esp type flag");
+      }
+    } else if (size == 4) {
+      char temp[5];
+      std::streampos pos = data->tellg();
+      data->read(temp, 4);
+      temp[4] = '\0';
+      static std::string lastStr;
+      static std::streampos lastPos;
+
+      if ((size == 4)
         && ((temp[3] < 'A') || (temp[3] > 'Z'))
         && ((temp[3] < '0') || (temp[3] > '9'))
         && (temp[3] != '_')) {
-      if (memcmp(temp, "\0\0\0\0", 4) != 0) {
-        exit(1);
+        if (memcmp(temp, "\0\0\0\0", 4) != 0) {
+          throw std::exception("invalid esp type flag");
+        }
       }
+      lastStr = temp;
+      lastPos = pos;
     }
-    lastStr = temp;
-    lastPos = pos;
     */
-    data->seekg(static_cast<std::streamoff>(offset + size));
+
+    data->seekg(static_cast<std::streamoff>(offset) + size);
     memcpy(index + sizeof(int32_t), &size, sizeof(int32_t));
     index += sizeof(int32_t) * 2;
   } else {
@@ -224,16 +253,19 @@ template <> char *type_index_impl<std::string>(char *index, std::shared_ptr<IOWr
   return index;
 }
 
-template <> char *type_index_impl<std::vector<uint8_t>>(char *index, std::shared_ptr<IOWrapper> &data, const SizeFunc &sizeFunc, const DynObject *obj, bool sizeField) {
+template <> char *type_index_impl<std::vector<uint8_t>>(char *index, std::shared_ptr<IOWrapper> &data, const SizeFunc &sizeFunc, const DynObject *obj, bool sizeField, const std::string &debug) {
   assert(sizeField == true);
   int32_t offset = static_cast<int32_t>(data->tellg());
   if (offset < 0) {
-    throw new std::runtime_error("invalid data offset");
+    throw std::runtime_error("invalid data offset");
   }
 
   memcpy(index, &offset, sizeof(int32_t));
 
   ObjSize size = sizeFunc(*obj);
+  if (size < 0) {
+    throw std::runtime_error("invalid size");
+  }
   std::streampos pos = data->tellg();
   data->seekg(static_cast<size_t>(offset) + size);
   memcpy(index + sizeof(int32_t), &size, sizeof(int32_t));
@@ -243,20 +275,20 @@ template <> char *type_index_impl<std::vector<uint8_t>>(char *index, std::shared
 }
 
 
-char *type_index(TypeId type, const SizeFunc &size, char *index, std::shared_ptr<IOWrapper> &data, const DynObject *obj) {
+char *type_index(TypeId type, const SizeFunc &size, char *index, std::shared_ptr<IOWrapper> &data, const DynObject *obj, const std::string &debug) {
   switch (type) {
-    case TypeId::int8: return type_index_num<int8_t>(index, data);
-    case TypeId::int16: return type_index_num<int16_t>(index, data);
-    case TypeId::int32: return type_index_num<int32_t>(index, data);
-    case TypeId::int64: return type_index_num<int64_t>(index, data);
-    case TypeId::uint8: return type_index_num<uint8_t>(index, data);
-    case TypeId::uint16: return type_index_num<uint16_t>(index, data);
-    case TypeId::uint32: return type_index_num<uint32_t>(index, data);
-    case TypeId::uint64: return type_index_num<uint64_t>(index, data);
-    case TypeId::float32_iee754: return type_index_num<float>(index, data);
-    case TypeId::stringz: return type_index_impl<std::string>(index, data, size, obj, false);
-    case TypeId::string: return type_index_impl<std::string>(index, data, size, obj, true);
-    case TypeId::bytes: return type_index_impl<std::vector<uint8_t>>(index, data, size, obj, true);
+    case TypeId::int8: return type_index_num<int8_t>(index, data, debug);
+    case TypeId::int16: return type_index_num<int16_t>(index, data, debug);
+    case TypeId::int32: return type_index_num<int32_t>(index, data, debug);
+    case TypeId::int64: return type_index_num<int64_t>(index, data, debug);
+    case TypeId::uint8: return type_index_num<uint8_t>(index, data, debug);
+    case TypeId::uint16: return type_index_num<uint16_t>(index, data, debug);
+    case TypeId::uint32: return type_index_num<uint32_t>(index, data, debug);
+    case TypeId::uint64: return type_index_num<uint64_t>(index, data, debug);
+    case TypeId::float32_iee754: return type_index_num<float>(index, data, debug);
+    case TypeId::stringz: return type_index_impl<std::string>(index, data, size, obj, false, debug);
+    case TypeId::string: return type_index_impl<std::string>(index, data, size, obj, true, debug);
+    case TypeId::bytes: return type_index_impl<std::vector<uint8_t>>(index, data, size, obj, true, debug);
     case TypeId::custom: return type_index_obj(index, data, data->tellg(), size(*obj), obj);
   }
   throw std::runtime_error("invalid type");

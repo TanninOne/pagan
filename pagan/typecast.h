@@ -2,6 +2,7 @@
 
 #include "iowrap.h"
 #include "types.h"
+#include "IScriptQuery.h"
 #include <cstdint>
 #include <stdexcept>
 #include <memory>
@@ -22,7 +23,7 @@ template <typename T> T type_read(TypeId type, char *index, std::shared_ptr<IOWr
 // using an index, write data
 template <typename T> char *type_write(TypeId type, char *index, std::shared_ptr<IOWrapper> &write, const T &value);
 // create an index for data
-char *type_index(TypeId type, const SizeFunc &size, char *index, std::shared_ptr<IOWrapper> &data, const DynObject *obj);
+char *type_index(TypeId type, const SizeFunc &size, char *index, std::shared_ptr<IOWrapper> &data, const DynObject *obj, const std::string &debug);
 
 char *type_index_obj(char *index, std::shared_ptr<IOWrapper> &data, std::streampos dataPos, ObjSize size, const DynObject *obj);
 

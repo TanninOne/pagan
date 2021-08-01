@@ -2,13 +2,19 @@
 
 #include "streamregistry.h"
 #include "typecast.h"
-#include "typespec.h"
 #include "util.h"
 #include "flexi_cast.h"
+#include "IScriptQuery.h"
+#include "TypeProperty.h"
+#include "constants.h"
 #include <cstdint>
 #include <iostream>
 
-class DynObject
+class TypeSpec;
+class ObjectIndex;
+class ObjectIndexTable;
+
+class DynObject : public IScriptQuery
 {
 
 public:
@@ -51,172 +57,68 @@ public:
   ~DynObject() {
   }
 
+  DynObject& operator=(const DynObject& reference) {
+    if (this != &reference) {
+      m_Spec = reference.m_Spec;
+      m_IndexTable = reference.m_IndexTable;
+      m_ObjectIndex = reference.m_ObjectIndex;
+      m_Parent = reference.m_Parent;
+    }
+    return *this;
+  }
+
   DynObject &operator=(DynObject &&) = default;
 
-  void saveTo(std::shared_ptr<IOWrapper> file) {
-    for (auto prop : getKeys()) {
-      int propertyOffset;
-      auto iter = m_Spec->propertyByKey(m_ObjectIndex, prop.c_str(), &propertyOffset);
+  void saveTo(std::shared_ptr<IOWrapper> file);
 
-      uint8_t *propBuffer = m_ObjectIndex->properties + propertyOffset;
-      uint32_t typeId = iter->typeId;
+  void savePropTo(std::shared_ptr<IOWrapper> file, uint32_t typeId, uint8_t* propBuffer);
 
-      if (typeId == TypeId::runtime) {
-        typeId = *reinterpret_cast<uint32_t*>(propBuffer);
-        propBuffer += sizeof(uint32_t);
-      }
+  void debug(size_t indent) const;
 
-      if (!iter->isList) {
-        savePropTo(file, typeId, propBuffer);
-      } else {
-        size_t offset;
-        uint32_t typeId;
-
-        std::tie(typeId, offset) = m_Spec->get(m_ObjectIndex, prop.c_str());
-
-        union {
-          struct {
-            ObjSize count;
-            ObjSize offset;
-          } arrayProp;
-          uint64_t buff;
-        };
-
-        buff = *reinterpret_cast<uint64_t*>(m_ObjectIndex->properties + offset);
-
-        uint8_t *arrayPtr = m_IndexTable->arrayAddress(arrayProp.offset);
-
-        uint8_t *arrayData = m_IndexTable->arrayAddress(arrayProp.offset);
-        uint8_t *arrayCur = arrayData;
-
-        for (int i = 0; i < arrayProp.count; ++i) {
-          savePropTo(file, typeId, arrayCur);
-          if (typeId >= TypeId::custom) {
-            arrayCur += sizeof(int64_t);
-          }
-        }
-      }
-    }
-  }
-
-  void savePropTo(std::shared_ptr<IOWrapper> file, uint32_t typeId, uint8_t *propBuffer) {
-    if (typeId >= TypeId::custom) {
-      int64_t objOffset = *reinterpret_cast<const int64_t*>(propBuffer);
-      std::shared_ptr<TypeSpec> type(m_Spec->getRegistry()->getById(typeId));
-
-      if (!type) {
-        throw IncompatibleType(fmt::format("type id not found in registry {}", typeId).c_str());
-      }
-
-      DynObject obj = getObjectAtOffset(type, objOffset, propBuffer);
-      obj.saveTo(file);
-    }
-    else {
-      std::shared_ptr<IOWrapper> dataStream = m_Streams.get(m_ObjectIndex->dataStream);
-      std::shared_ptr<IOWrapper> writeStream = m_Streams.getWrite();
-      type_copy_any(static_cast<TypeId>(typeId), reinterpret_cast<char*>(propBuffer), file, dataStream, writeStream);
-    }
-  }
-
-  void debug(size_t indent) const {
-    int idx = 0;
-
-    std::string sStr;
-    sStr.resize(indent * 2, ' ');
-
-    for (auto prop : getKeys()) {
-      int propertyOffset;
-      auto iter = m_Spec->propertyByKey(m_ObjectIndex, prop.c_str(), &propertyOffset);
-      std::cout << "attribute offset " << propertyOffset << std::endl;
-
-      uint8_t *propBuffer = m_ObjectIndex->properties + propertyOffset;
-      uint32_t typeId = iter->typeId;
-
-      std::cout << "list: " << iter->isList << " - " << typeId << std::endl;
-
-      if (iter->isList) {
-        std::cout << sStr << " " << prop << "..." << std::endl;
-        continue;
-      }
-
-      if (typeId == TypeId::runtime) {
-        typeId = *reinterpret_cast<uint32_t*>(propBuffer);
-        propBuffer += sizeof(uint32_t);
-      }
-
-      if (typeId >= TypeId::custom) {
-        int64_t objOffset = *reinterpret_cast<const int64_t*>(propBuffer);
-        std::shared_ptr<TypeSpec> type(m_Spec->getRegistry()->getById(typeId));
-
-        if (!type) {
-          throw IncompatibleType(fmt::format("type id not found in registry {}", typeId).c_str());
-        }
-
-        getObjectAtOffset(type, objOffset, propBuffer).debug(indent + 1);
-      }
-      else {
-        std::cout << "pod " << m_ObjectIndex->dataStream << " - " << std::endl;
-        std::shared_ptr<IOWrapper> dataStream = m_Streams.get(m_ObjectIndex->dataStream);
-        std::shared_ptr<IOWrapper> writeStream = m_Streams.getWrite();
-
-        std::any val = type_read_any(static_cast<TypeId>(typeId), reinterpret_cast<char*>(propBuffer), dataStream, writeStream);
-
-        try {
-          std::cout << sStr << " " << prop << " = " << flexi_cast<std::string>(val) << std::endl;
-        }
-        catch (const std::bad_any_cast&) {
-          std::cout << sStr << " " << prop << " = unknown" << std::endl;
-        }
-      }
-    }
-  }
-
-  void writeIndex(size_t dataOffset, std::streampos streamLimit, bool noSeek) {
-    std::shared_ptr<IOWrapper> stream = noSeek
-      ? m_Streams.get(m_ObjectIndex->dataStream)
-      : m_Streams.get(m_ObjectIndex->dataStream, m_ObjectIndex->dataOffset);
-    m_Spec->writeIndex(m_IndexTable, m_ObjectIndex,
-                              stream,
-                              m_Streams, this, streamLimit);
-  }
+  void writeIndex(size_t dataOffset, std::streampos streamLimit, bool noSeek);
 
   ObjectIndex *getIndex() const {
     return m_ObjectIndex;
   }
 
-  uint8_t *getBitmask() const {
-    return m_ObjectIndex->bitmask;
+  uint8_t* getBitmask() const;
+
+  std::shared_ptr<TypeSpec> getSpec() const {
+    return m_Spec;
   }
 
-  uint32_t getTypeId() const {
-    return m_Spec->getId();
+  std::shared_ptr<IOWrapper> getDataStream() const;
+
+  std::shared_ptr<IOWrapper> getWriteStream() const {
+    return m_Streams.getWrite();
   }
 
-  std::vector<std::string> getKeys() const {
-    std::vector<std::string> res;
+  uint32_t getTypeId() const;
 
-    auto props = m_Spec->getProperties();
-    for (int i = 0; i < props.size(); ++i) {
-      if (isBitSet(m_ObjectIndex, i)) {
-        res.push_back(props[i].key);
-      }
-    }
+  std::vector<std::string> getKeys() const;
 
-    return res;
+  bool has(const char* key) const;
+
+  std::pair<uint32_t, uint8_t*> getEffectiveType(const char* key) const;
+
+  bool isCustom(const char *key) const {
+    uint8_t *propBuffer;
+    uint32_t typeId;
+
+    std::tie(typeId, propBuffer) = getEffectiveType(key);
+
+    return typeId >= TypeId::custom;
   }
 
-  bool has(const char *key) const {
-    auto props = m_Spec->getProperties();
-    for (int i = 0; i < props.size(); ++i) {
-      if (isBitSet(m_ObjectIndex, i) && (props[i].key == key)) {
-        return true;
-      }
-    }
+  const TypeProperty& getChildType(const char* key) const;
 
-    return false;
-  }
-
+  // get the value at the specified key
+  // note: the key gets modified in the process!
   std::any getAny(char *key) const;
+
+  std::any getAny(std::string key) const {
+    return getAny(&key[0]);
+  }
 
   std::any getAny(const std::vector<std::string>::const_iterator &cur, const std::vector<std::string>::const_iterator &end) const;
 
@@ -224,7 +126,7 @@ public:
               const std::vector<std::string>::const_iterator &end,
               const std::any &value);
 
-  template <typename T> T get(const char *key) const;
+  template <typename T> T get(const char* key) const;
 
   template <typename T> std::vector<T> getList(const char *key) const;
 
@@ -262,25 +164,20 @@ private:
 
   DynObject getObjectAtOffset(std::shared_ptr<TypeSpec> type,
                               int64_t objOffset,
-                              uint8_t *prop) const {
-    if (objOffset < 0) {
-      // offset is the index offset for an already-indexed object
-      int64_t indexOffset = objOffset * -1;
+                              uint8_t* prop) const;
 
-      return DynObject(type, m_Streams, m_IndexTable, reinterpret_cast<ObjectIndex*>(indexOffset), this);
-    }
-    else {
-      ObjectIndex *objIndex = m_IndexTable->allocateObject(type, m_ObjectIndex->dataStream, objOffset);
-      // offset is the data offset for a not-yet-indexed object
-      DynObject res(type, m_Streams, m_IndexTable, objIndex, this);
-      res.writeIndex(objOffset, 0, false);
-      // LOG_F("not indexed, data {0}", objOffset);
-      objOffset = reinterpret_cast<int64_t>(objIndex) * -1;
+  bool hasComputed(const char* key) const;
 
-      memcpy(prop, reinterpret_cast<char*>(&objOffset), sizeof(int64_t));
-      return res;
-    }
-  }
+  std::any compute(const char* key, const DynObject* obj) const;
+
+  std::tuple<uint32_t, size_t> getSpec(const char* key) const;
+  std::tuple<uint32_t, size_t, SizeFunc, AssignCB> getFullSpec(const char* key) const;
+  const TypeProperty& getProperty(const char* key) const;
+
+  DynObject getObject(const char* key) const;
+
+  std::vector<DynObject> getListOfObjects(const char* key) const;
+  std::vector<std::any> getListOfAny(const char* key) const;
 
 private:
 
@@ -293,63 +190,19 @@ private:
 };
 
 template<>
-inline DynObject DynObject::get(const char *key) const {
-  if (strcmp(key, "_parent") == 0) {
-    if (m_Parent == nullptr) {
-      throw std::runtime_error("parent pointer not set");
-    }
-    return *m_Parent;
-  }
-
-  size_t propOffset;
-  uint32_t typeId;
-  std::tie(typeId, propOffset) = m_Spec->get(m_ObjectIndex, key);
-
-  uint8_t *propBuffer = m_ObjectIndex->properties + propOffset;
-
-  if (typeId == TypeId::runtime) {
-    typeId = *reinterpret_cast<uint32_t*>(propBuffer);
-    propBuffer += sizeof(uint32_t);
-  }
-
-  if (typeId < TypeId::custom) {
-    LOG_F("different type stored {0}", typeId);
-    throw IncompatibleType(fmt::format("expected custom item, got {}", typeId).c_str());
-  }
-
-  // offset - either into the data stream if the object hasn't been cached yet or to
-  //   its index
-  int64_t objOffset = *reinterpret_cast<const int64_t*>(propBuffer);
-
-  std::shared_ptr<TypeSpec> type(m_Spec->getRegistry()->getById(typeId));
-
-  if (!type) {
-    throw IncompatibleType(fmt::format("type id not found in registry {}", typeId).c_str());
-  }
-
-  // LOG_F("child object {} type {} - offset {}", key, type->getName(), objOffset);
-
-  return getObjectAtOffset(type, objOffset, propBuffer);
+inline DynObject DynObject::get(const char* key) const {
+  return getObject(key);
 }
 
-
 template<typename T>
-inline T DynObject::get(const char *key) const {
-  if (m_Spec->hasComputed(key)) {
-    return flexi_cast<T>(m_Spec->compute(key, this));
+inline T DynObject::get(const char* key) const {
+  if (hasComputed(key)) {
+    return flexi_cast<T>(compute(key, this));
   }
 
-  size_t offset;
   uint32_t typeId;
-
-  std::tie(typeId, offset) = m_Spec->get(m_ObjectIndex, key);
-
-  uint8_t *propBuffer = m_ObjectIndex->properties + offset;
-
-  if (typeId == TypeId::runtime) {
-    typeId = *reinterpret_cast<uint32_t*>(propBuffer);
-    propBuffer += sizeof(uint32_t);
-  }
+  uint8_t* propBuffer;
+  std::tie(typeId, propBuffer) = getEffectiveType(key);
 
   if (typeId >= TypeId::custom) {
     throw IncompatibleType("expected POD");
@@ -357,57 +210,18 @@ inline T DynObject::get(const char *key) const {
 
   std::shared_ptr<IOWrapper> dataStream = m_Streams.get(m_ObjectIndex->dataStream);
   std::shared_ptr<IOWrapper> writeStream = m_Streams.getWrite();
-  
+
   return type_read<T>(static_cast<TypeId>(typeId), reinterpret_cast<char*>(propBuffer), dataStream, writeStream);
 }
 
 template<>
 inline std::vector<DynObject> DynObject::getList(const char *key) const {
-  LOG_BRACKET_F("get list of obj {0}", key);
+  return getListOfObjects(key);
+}
 
-  size_t offset;
-  uint32_t typeId;
-
-  std::tie(typeId, offset) = m_Spec->get(m_ObjectIndex, key);
-  LOG_F("(3) key {0} offset {1}", key, offset);
-
-  // if it's a runtime type the concrete type is stored with each item individually
-  // so we can't currently determine if the type at runtime is actually valid
-  if ((typeId < TypeId::custom) && (typeId != TypeId::runtime)) {
-    throw IncompatibleType(fmt::format("expected custom list, got {}", typeId).c_str());
-  }
-
-  std::shared_ptr<IOWrapper> writeStream = m_Streams.getWrite();
-
-  // property contains item count and an offset into the array index
-  union {
-    struct {
-      ObjSize count;
-      ObjSize offset;
-    } arrayProp;
-    uint64_t buff;
-  };
-
-  buff = *reinterpret_cast<uint64_t*>(m_ObjectIndex->properties + offset);
-
-  uint8_t *arrayData = m_IndexTable->arrayAddress(arrayProp.offset);
-  uint8_t *arrayCur = arrayData;
-
-  std::vector<DynObject> res;
-  for (int i = 0; i < arrayProp.count; ++i) {
-    uint32_t itemType = typeId;
-    if (itemType == TypeId::runtime) {
-      itemType = *reinterpret_cast<uint32_t*>(arrayCur);
-      arrayCur += sizeof(uint32_t);
-    }
-    int64_t objOffset = *reinterpret_cast<int64_t*>(arrayCur);
-
-    std::shared_ptr<TypeSpec> type(m_Spec->getRegistry()->getById(itemType));
-    res.push_back(getObjectAtOffset(type, objOffset, arrayCur));
-    arrayCur += sizeof(int64_t);
-  }
-
-  return res;
+template<>
+inline std::vector<std::any> DynObject::getList(const char* key) const {
+  return getListOfAny(key);
 }
 
 template<typename T>
@@ -509,7 +323,7 @@ inline void DynObject::setList(const char *key, const std::vector<T> &value) {
   SizeFunc size;
   AssignCB onAssign;
 
-  std::tie(typeId, offset, size, onAssign) = m_Spec->getFull(m_ObjectIndex, key);
+  std::tie(typeId, offset, size, onAssign) = getFullSpec(key);
 
   if (typeId >= TypeId::custom) {
     throw IncompatibleType("Expected POD");

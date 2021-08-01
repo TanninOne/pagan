@@ -1,0 +1,14 @@
+x64
+binpargen4_optimized_with_index_buffers
+binpargen4_working_with_index_buffers
+binpargen4 _mostly_working_with_index_streams
+.vs  
+.vscode  
+*.esm* 
+*.ksy 
+*.pdb 
+node_modules
+node-pagan/build
+node-pagan/manual_build
+*.vcxproj.filters  
+*.vcxproj.user  

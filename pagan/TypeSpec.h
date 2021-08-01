@@ -16,18 +16,16 @@
 #include "streamregistry.h"
 #include "util.h"
 #include "objectindextable.h"
-
-class DynObject;
+#include "dynobject.h"
+#include "constants.h"
+#include "typeproperty.h"
 
 // number of properties where we use a static buffer to buffer
 // the properties. If an object has more properties, we allocate a buffer
 // on the heap
 static const int NUM_STATIC_PROPERTIES = 64;
 
-static const ObjSize COUNT_EOS = -2;
-
-typedef std::function<uint8_t* (uint8_t*, DynObject*, DataStreamId, std::shared_ptr<IOWrapper>, std::streampos)> IndexFunc;
-
+/*
 struct TypeProperty {
   std::string key;
   uint32_t typeId;
@@ -41,21 +39,23 @@ struct TypeProperty {
   bool isValidated;
   bool hasSizeFunc;
   bool isSwitch;
+  std::string debug;
   std::string processing;
   IndexFunc index;
   SwitchFunc switchFunc;
   std::map<std::variant<std::string, int32_t>, uint32_t> switchCases;
 };
+*/
 
-static SizeFunc nullSize = [] (const DynObject &object) -> ObjSize {
+static SizeFunc nullSize = [] (const IScriptQuery &object) -> ObjSize {
   return -1;
 };
 
-static SizeFunc eosCount = [] (const DynObject &object) -> ObjSize {
+static SizeFunc eosCount = [] (const IScriptQuery &object) -> ObjSize {
   return COUNT_EOS;
 };
 
-static ConditionFunc trueFunc = [](const DynObject &object) -> bool {
+static ConditionFunc trueFunc = [](const IScriptQuery &object) -> bool {
   return true;
 };
 
@@ -63,7 +63,7 @@ static ValidationFunc validFunc = [](const std::any& value) -> bool {
   return true;
 };
 
-static AssignCB nop = [] (DynObject &object) {
+static AssignCB nop = [] (IScriptQuery &object) {
 };
 
 class TypePropertyBuilder {
@@ -81,6 +81,7 @@ public:
   TypePropertyBuilder &onAssign(AssignCB func);
   TypePropertyBuilder &withProcessing(const std::string &algorithm);
   TypePropertyBuilder &withValidation(ValidationFunc func);
+  TypePropertyBuilder &withDebug(const std::string &debugMessage);
 
 private:
   TypeProperty *m_Wrappee;
@@ -102,7 +103,7 @@ class TypeSpec
 
 public:
 
-  TypeSpec(const char *name, TypeRegistry *registry);
+  TypeSpec(const char *name, uint32_t id, TypeRegistry *registry);
   ~TypeSpec();
 
   TypeRegistry *getRegistry() const {
@@ -119,6 +120,7 @@ public:
 
   TypePropertyBuilder appendProperty(const char *key, uint32_t type) {
     LOG_F("append prop to {0} - {1} size index {2}, size data {3}", m_Id, key, m_IndexSize, m_StaticSize);
+    m_SequenceIdx[key] = m_Sequence.size();
     m_Sequence.push_back({ key, type, nullSize, nullSize, validFunc, trueFunc, nop, false, false, false, false });
     TypeProperty *prop = &*m_Sequence.rbegin();
     return TypePropertyBuilder(prop, [this, type, prop]() {
@@ -146,6 +148,14 @@ public:
     return m_StaticSize;
   }
 
+  void indexEOSArray(const TypeProperty &prop,
+                     ObjectIndexTable *indexTable,
+                     uint8_t *buffer,
+                     const DynObject *obj,
+                     DataStreamId dataStream,
+                     std::shared_ptr<IOWrapper> data,
+    std::streampos streamLimit);
+
   /**
     * index the specified property for this object to the buffer.
     * After this call the read pointer of the data stream has to be positioned after the
@@ -168,38 +178,18 @@ public:
       LOG_BRACKET("indexing array");
 
       if (count == COUNT_EOS) {
-        // unknown number of items
+        // unknown number of items but we know the total size of items.
+        // we use the array index to store start and size in the data stream, so that it can later be
+        // lazy loaded easily
+        uint64_t dataOffset = data->tellg();
+        ObjSize arrayOffset = indexTable->allocateArray(16);
+        uint8_t* curPos = indexTable->arrayAddress(arrayOffset);
+        memcpy(curPos, reinterpret_cast<char*>(&dataOffset), sizeof(uint64_t));
+        memcpy(curPos + sizeof(uint64_t), reinterpret_cast<char*>(&streamLimit), sizeof(uint64_t));
 
-        std::vector<uint8_t> tmpArrayBuffer(8 * NUM_STATIC_PROPERTIES);
-        uint8_t *curPos = &tmpArrayBuffer[0];
-        uint8_t *endPos = curPos + tmpArrayBuffer.size();
-
-        int j = 0;
-        try {
-          while (data->tellg() < streamLimit) {
-            curPos = prop.index(curPos, obj, dataStream, data, streamLimit);
-            if (curPos + 8 >= endPos) {
-              const size_t offset = curPos - &tmpArrayBuffer[0];
-              tmpArrayBuffer.resize(tmpArrayBuffer.size() * 2);
-              curPos = &tmpArrayBuffer[0] + offset;
-              endPos = &tmpArrayBuffer[0] + tmpArrayBuffer.size();
-            }
-            ++j;
-          }
-        }
-        catch (const std::exception &e) {
-          // TODO: assuming this is an eof exception
-          LOG_F("eos loop canceled: {}", e.what());
-          throw e;
-        }
-        // why the + 1?
-        // count = j + 1;
-        count = j;
-        uint32_t arraySize = static_cast<uint32_t>(curPos - &tmpArrayBuffer[0]);
-        ObjSize arrayOffset = indexTable->allocateArray(arraySize);
-        memcpy(indexTable->arrayAddress(arrayOffset), &tmpArrayBuffer[0], arraySize);
         memcpy(buffer, reinterpret_cast<char*>(&count), sizeof(ObjSize));
         memcpy(buffer + sizeof(ObjSize), reinterpret_cast<char*>(&arrayOffset), sizeof(ObjSize));
+        data->seekg(streamLimit);
       }
       else {
         // In the case of a static length array we can allocate the target array right away
@@ -229,11 +219,19 @@ public:
     return m_Sequence;
   }
 
+  const TypeProperty& getProperty(const char* key) const {
+    auto iter = m_SequenceIdx.find(key);
+    if (iter == m_SequenceIdx.end()) {
+      throw std::runtime_error(fmt::format("invalid property requested: {0}", key));
+    }
+    return m_Sequence[iter->second];
+  }
+
   bool hasComputed(const char* key) const {
     return m_Computed.find(key) != m_Computed.end();
   }
 
-  std::any compute(const char* key, const DynObject* obj) const {
+  std::any compute(const char* key, const IScriptQuery* obj) const {
     return m_Computed.at(key)(*obj);
   }
 
@@ -253,10 +251,12 @@ public:
 
 private:
 
+  /*
   static uint32_t getNextId() {
     static std::atomic<uint32_t> s_NextId = TypeId::custom;
     return s_NextId++;
   }
+  */
 
 private:
 
@@ -325,7 +325,7 @@ private:
   uint8_t *indexCustom(const TypeProperty &prop, uint32_t typeId,
     const StreamRegistry &streams,
     ObjectIndexTable *indexTable,
-    uint8_t *index, DynObject *obj,
+    uint8_t *index, const DynObject *obj,
     DataStreamId dataStream, std::shared_ptr<IOWrapper> data, std::streampos streamLimit);
 
   auto makeIndexFunc(const TypeProperty &prop,
@@ -338,9 +338,13 @@ private:
   std::string m_Name;
   TypeRegistry *m_Registry;
   std::vector<TypeProperty> m_Sequence;
+  std::map<std::string, int> m_SequenceIdx;
   std::map<std::string, ComputeFunc> m_Computed;
   uint16_t m_IndexSize{0};
   uint32_t m_Id;
   int32_t m_StaticSize;
 
+  uint8_t m_BaseBuffer[8 * NUM_STATIC_PROPERTIES];
+
 };
+

@@ -36,6 +36,7 @@ ObjectIndex *ObjectIndexTable::allocateObject(const std::shared_ptr<TypeSpec> ty
   uint8_t *target = **m_ObjBuffers.rbegin() + m_NextFreeObjIndex;
 
   m_NextFreeObjIndex += indexSize;
+  ++m_ObjectCount;
 
   return initIndex(target, type, dataStream, dataOffset);
 }
@@ -64,6 +65,7 @@ ObjSize ObjectIndexTable::allocateArray(uint32_t size) {
     | m_NextFreeArrayIndex);
 
   m_NextFreeArrayIndex += size;
+  ++m_ObjectCount;
 
   return offset;
 }
@@ -76,6 +78,10 @@ uint8_t *ObjectIndexTable::arrayAddress(ObjSize offset) {
 }
 
 void ObjectIndexTable::addObjBuffer() {
+  if (m_ObjBuffers.size() > 0) {
+    // for debugging purposes we store how much of each chunk is actually used
+    m_ObjBufferSizes.push_back(m_NextFreeObjIndex);
+  }
   m_ObjBuffers.push_back(std::make_unique<uint8_t*>(new uint8_t[CHUNK_SIZE]));
   m_NextFreeObjIndex = 0;
 }
@@ -90,3 +96,25 @@ void ObjectIndexTable::addArrayBuffer() {
   m_NextFreeArrayIndex = 0;
 }
 
+std::vector<uint8_t> ObjectIndexTable::getObjectIndex() const {
+  std::vector<uint8_t> result;
+  for (int i = 0; i < m_ObjBuffers.size() - 1; ++i) {
+    uint8_t *from = *(m_ObjBuffers[i].get());
+    uint8_t *to = from + m_ObjBufferSizes[i];
+    result.insert(result.end(), from, to);
+  }
+  uint8_t *from = *(m_ObjBuffers.rbegin()->get());
+  uint8_t* to = from + m_NextFreeObjIndex;
+  result.insert(result.end(), from, to);
+  return result;
+}
+
+std::vector<uint8_t> ObjectIndexTable::getArrayIndex() const {
+  std::vector<uint8_t> result;
+  for (const auto &iter : m_ArrayBuffers) {
+    uint8_t *from = *(iter.get());
+    uint8_t *to = from + CHUNK_SIZE;
+    result.insert(result.end(), from, to);
+  }
+  return result;
+}

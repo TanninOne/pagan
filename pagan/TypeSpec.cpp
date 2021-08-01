@@ -1,8 +1,8 @@
 #include "TypeSpec.h"
 #include "DynObject.h"
 
-TypeSpec::TypeSpec(const char *name, TypeRegistry *registry)
-  : m_Name(name), m_Registry(registry), m_Id(TypeSpec::getNextId()), m_StaticSize(0)
+TypeSpec::TypeSpec(const char *name, uint32_t typeId, TypeRegistry *registry)
+  : m_Name(name), m_Registry(registry), m_Id(typeId), m_StaticSize(0)
 {
 }
 
@@ -10,12 +10,64 @@ TypeSpec::~TypeSpec()
 {
 }
 
+void TypeSpec::indexEOSArray(const TypeProperty& prop, ObjectIndexTable* indexTable, uint8_t* buffer, const DynObject* obj, DataStreamId dataStream, std::shared_ptr<IOWrapper> data, std::streampos streamLimit) {
+  // std::vector<uint8_t> tmpArrayBuffer(8 * NUM_STATIC_PROPERTIES);
+  // uint8_t *curPos = &tmpArrayBuffer[0];
+  // uint8_t *endPos = curPos + tmpArrayBuffer.size();
+  uint32_t size = NUM_STATIC_PROPERTIES * 8;
+  uint8_t* tmpBuffer = m_BaseBuffer;
+  memset(tmpBuffer, 0, 8 * NUM_STATIC_PROPERTIES);
+  uint8_t* curPos = tmpBuffer;
+  uint8_t* endPos = tmpBuffer + size;
+
+  int j = 0;
+  try {
+    while (data->tellg() < streamLimit) {
+      curPos = prop.index(curPos, obj, dataStream, data, streamLimit);
+      if (curPos + 8 >= endPos) {
+        const size_t offset = curPos - tmpBuffer;
+        // tmpArrayBuffer.resize(tmpArrayBuffer.size() * 2);
+        size *= 2;
+        uint8_t* newBuffer = new uint8_t[size];
+        memcpy(newBuffer, tmpBuffer, offset);
+        tmpBuffer = newBuffer;
+
+        curPos = tmpBuffer + offset;
+        endPos = tmpBuffer + size;
+      }
+      ++j;
+    }
+  }
+  catch (const std::exception& e) {
+    // TODO: assuming this is an eof exception
+    LOG_F("eos loop canceled: {}", e.what());
+    // if (tmpBuffer != m_BaseBuffer) { delete [] tmpBuffer; }
+    // throw e;
+  }
+  // why the + 1?
+  // count = j + 1;
+  ObjSize count = j;
+  uint32_t arraySize = static_cast<uint32_t>(curPos - tmpBuffer);
+  // std::cout << "array size " << arraySize << std::endl;
+  // create a sufficiently sized array index
+  ObjSize arrayOffset = indexTable->allocateArray(arraySize);
+  // store the array index
+  memcpy(indexTable->arrayAddress(arrayOffset), tmpBuffer, arraySize);
+  // buffer receives the effective number of items and the offset into the array index
+  memcpy(buffer, reinterpret_cast<char*>(&count), sizeof(ObjSize));
+  memcpy(buffer + sizeof(ObjSize), reinterpret_cast<char*>(&arrayOffset), sizeof(ObjSize));
+  if (tmpBuffer != m_BaseBuffer) {
+    delete[] tmpBuffer;
+  }
+}
+
 void TypeSpec::writeIndex(ObjectIndexTable *indexTable, ObjectIndex *objIndex, std::shared_ptr<IOWrapper> data, const StreamRegistry &streams, DynObject *obj, std::streampos streamLimit) {
   // first: base data offset of the object
   // TODO: this should be the id of the data stream 
   DataStreamId dataStream = 0;
   DataOffset dataOffset = data->tellg();
-  auto bracket = LogBracket::create(fmt::format("write index for obj type {} data {} size {}", m_Name, dataOffset, m_IndexSize));
+  LOG_BRACKET_F("write index for obj type {} data {} size {}", m_Name, dataOffset, m_IndexSize);
+  // auto bracket = LogBracket::create(fmt::format("write index for obj type {} data {} size {}", m_Name, dataOffset, m_IndexSize));
 
   // second: the bitmask reflecting which attributes are present
   //   for now this is all zeros because we don't actually know yet
@@ -128,7 +180,7 @@ std::tuple<uint32_t, size_t, SizeFunc, AssignCB> TypeSpec::getFull(ObjectIndex *
 uint8_t *TypeSpec::indexCustom(const TypeProperty &prop, uint32_t typeId,
                                const StreamRegistry &streams,
                                ObjectIndexTable *indexTable,
-                               uint8_t *index, DynObject *obj,
+                               uint8_t *index, const DynObject *obj,
                                DataStreamId dataStream, std::shared_ptr<IOWrapper> data, std::streampos streamLimit) {
   std::shared_ptr<TypeSpec> spec = m_Registry->getById(typeId);
   int staticSize = spec->getStaticSize();
@@ -197,7 +249,7 @@ auto TypeSpec::makeIndexFunc(const TypeProperty &prop,
                              ObjectIndexTable *indexTable)
                              -> IndexFunc {
   if (prop.typeId == TypeId::runtime) {
-    return [this, prop, indexTable, streams](uint8_t *index, DynObject *obj, DataStreamId dataStream, std::shared_ptr<IOWrapper> data, std::streampos streamLimit) -> uint8_t* {
+    return [this, prop, indexTable, streams](uint8_t *index, const DynObject *obj, DataStreamId dataStream, std::shared_ptr<IOWrapper> data, std::streampos streamLimit) -> uint8_t* {
       std::variant<std::string, int32_t> caseId = prop.switchFunc(*obj);
       auto iter = prop.switchCases.find(caseId);
       if (iter == prop.switchCases.end()) {
@@ -222,21 +274,21 @@ auto TypeSpec::makeIndexFunc(const TypeProperty &prop,
         return this->indexCustom(prop, typeId, streams, indexTable, index, obj, dataStream, data, streamLimit);
       }
       else {
-        char *res = type_index(static_cast<TypeId>(typeId), prop.size, reinterpret_cast<char*>(index), data, obj);
+        char *res = type_index(static_cast<TypeId>(typeId), prop.size, reinterpret_cast<char*>(index), data, obj, prop.debug);
         return reinterpret_cast<uint8_t*>(res);
       }
     };
   } else if (prop.typeId >= TypeId::custom) {
     // index custom type
-    return [this, prop, indexTable, streams](uint8_t *index, DynObject *obj, DataStreamId dataStream, std::shared_ptr<IOWrapper> data, std::streampos streamLimit) -> uint8_t* {
+    return [this, prop, indexTable, streams](uint8_t *index, const DynObject *obj, DataStreamId dataStream, std::shared_ptr<IOWrapper> data, std::streampos streamLimit) -> uint8_t* {
       LOG_F("index custom type {}", prop.typeId);
       return this->indexCustom(prop, prop.typeId, streams, indexTable, index, obj, dataStream, data, streamLimit);
     };
   } else {
     // index pod
-    return [=](uint8_t *index, DynObject *obj, DataStreamId dataStream, std::shared_ptr<IOWrapper> data, std::streampos streamLimit) -> uint8_t* {
+    return [=](uint8_t *index, const DynObject *obj, DataStreamId dataStream, std::shared_ptr<IOWrapper> data, std::streampos streamLimit) -> uint8_t* {
       LOG_F("index pod type {}", prop.typeId);
-      char *res = type_index(static_cast<TypeId>(prop.typeId), prop.size, reinterpret_cast<char*>(index), data, obj);
+      char *res = type_index(static_cast<TypeId>(prop.typeId), prop.size, reinterpret_cast<char*>(index), data, obj, prop.debug);
       return reinterpret_cast<uint8_t*>(res);
     };
   }
@@ -262,6 +314,11 @@ TypePropertyBuilder &TypePropertyBuilder::withCondition(ConditionFunc func) {
 TypePropertyBuilder& TypePropertyBuilder::withValidation(ValidationFunc func) {
   m_Wrappee->validation = func;
   m_Wrappee->isValidated = true;
+  return *this;
+}
+
+TypePropertyBuilder& TypePropertyBuilder::withDebug(const std::string &debugMessage) {
+  m_Wrappee->debug = debugMessage;
   return *this;
 }
 

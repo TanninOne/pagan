@@ -10,7 +10,7 @@
 #include <map>
 #include <vector>
 
-#include "dynobject.h"
+#include "IScriptQuery.h"
 #include "flexi_cast.h"
 
 namespace pegtl = tao::TAO_PEGTL_NAMESPACE;
@@ -185,7 +185,7 @@ namespace ExpressionSpec {
       insert(">", Order(8), [](const std::any &lhs, const std::any &rhs) { return flexi_cast<int64_t>(lhs) > flexi_cast<int64_t>(rhs); });
       insert("<=", Order(8), [](const std::any &lhs, const std::any &rhs) { return flexi_cast<int64_t>(lhs) <= flexi_cast<int64_t>(rhs); });
       insert(">=", Order(8), [](const std::any &lhs, const std::any &rhs) { return flexi_cast<int64_t>(lhs) >= flexi_cast<int64_t>(rhs); });
-      insert("==", Order(9), [](const std::any &lhs, const std::any &rhs) { return any_equal(lhs, rhs); });
+      insert("==", Order(9), [](const std::any& lhs, const std::any& rhs) { std::cout << flexi_cast<int64_t>(lhs) << "==" << flexi_cast<int64_t>(rhs) << std::endl; return any_equal(lhs, rhs); });
       insert("!=", Order(9), [](const std::any &lhs, const std::any &rhs) { return !any_equal(lhs, rhs); });
       insert("&", Order(10), [](const std::any &lhs, const std::any &rhs) { return flexi_cast<int64_t>(lhs) & flexi_cast<int64_t>(rhs); });
       insert("^", Order(11), [](const std::any &lhs, const std::any &rhs) { return flexi_cast<int64_t>(lhs) ^ flexi_cast<int64_t>(rhs); });
@@ -272,13 +272,13 @@ namespace ExpressionSpec {
   struct Not;
   struct Ternary;
   struct Bracket : if_must<one<'('>, Expression, one<')'>> {};
-  struct Atomic : sor<HexNumber, Not, Number, String, Ternary, Function, Identifier, Bracket> {};
-  struct Ternary : seq<Identifier, star<Ignored>, one<'?'>, star<Ignored>, Number, star<Ignored>, one<':'>, star<Ignored>, Number> {};
+  struct Atomic : sor<HexNumber, Not, Number, String, Function, Identifier, Bracket> {};
+  struct Ternary : seq<Expression, star<Ignored>, one<'?'>, star<Ignored>, Expression, star<Ignored>, one<':'>, star<Ignored>, Expression> {};
   struct Not : seq<sor<istring<'n', 'o', 't', ' '>, one<'!'>>, Atomic> {};
   struct Assignment : seq<Identifier, star<Ignored>, one<'='>, star<Ignored>, Expression> {};
   struct Function : seq<Identifier, one<'('>, Atomic, one<')'>> {};
   struct Expression : list<Atomic, Infix, Ignored> {};
-  struct Grammar : must<sor<Assignment, Expression>, eof> {};
+  struct Grammar : must<sor<Assignment, Ternary, Expression>, eof> {};
 
   template<typename Rule>
   struct Action : pegtl::nothing<Rule> {};
@@ -355,7 +355,7 @@ namespace ExpressionSpec {
   template <typename Rule>
   using Selector = pegtl::parse_tree::selector<
     Rule,
-    pegtl::parse_tree::apply_store_content::to<Number, HexNumber, String, Identifier, Ternary, Function, Infix>,
+    pegtl::parse_tree::apply_store_content::to<Number, Not, HexNumber, String, Identifier, Ternary, Function, Infix>,
     pegtl::parse_tree::apply_remove_content::to<>,
     pegtl::parse_tree::apply<Rearrange>::to<Expression>
   >;
@@ -363,6 +363,7 @@ namespace ExpressionSpec {
 
 static void printNode(const pegtl::parse_tree::node &node, const std::string &indent = "") {
   if (node.is_root()) {
+    std::cout << "root \"" << node.content() << "\" at " << node.begin() << " to " << node.end() << " - " << node.is<ExpressionSpec::Not>() << std::endl;
   } else {
     if (node.has_content()) { 
       std::cout << indent << node.id->name() << " \"" << node.content() << "\" at " << node.begin() << " to " << node.end() << " - " << node.is<ExpressionSpec::Infix>() << std::endl;
@@ -401,38 +402,50 @@ static std::map<std::string, std::function<std::any(const std::any&, const std::
 };
 
 
-static std::any evalNode(const pegtl::parse_tree::node& node, const ExpressionSpec::VariableResolver& resolver, const ExpressionSpec::VariableAssigner& assigner) {
+static std::any evalNode(const pegtl::parse_tree::node& node, const ExpressionSpec::VariableResolver& resolver, const ExpressionSpec::VariableAssigner& assigner, std::map<std::pair<uint64_t, uint64_t>, std::string> &identifiers) {
   if (node.is_root()) {
-    std::any res = evalNode(**node.children.rbegin(), resolver, assigner);
+    std::any res = evalNode(**node.children.rbegin(), resolver, assigner, identifiers);
     if (node.children.size() == 2) {
-      std::any varAny = evalNode(*node.children.front(), [](const std::string& key, uint64_t id) { return key; }, assigner);
+      std::any varAny = evalNode(*node.children.front(), [](const std::string& key, uint64_t id) { return key; }, assigner, identifiers);
       std::string var = flexi_cast<std::string>(varAny);
       assigner(var, res);
     }
 
     return res;
   }
-  else if (node.is<ExpressionSpec::Infix>()) {
-    const auto& iter = operators.find(node.content());
 
-    std::any lhs = evalNode(*(node.children.at(0)), resolver, assigner);
-    std::any rhs = evalNode(*(node.children.at(1)), resolver, assigner);
+  std::pair<uint64_t, uint64_t> idKey(node.begin().byte, node.end().byte);
+  auto id = identifiers.find(idKey);
+  if (id == identifiers.end()) {
+    identifiers[idKey] = node.content();
+    id = identifiers.find(idKey);
+  }
+
+  if (node.is<ExpressionSpec::Infix>()) {
+    const auto& iter = operators.find(id->second);
+
+    std::any lhs = evalNode(*(node.children.at(0)), resolver, assigner, identifiers);
+    std::any rhs = evalNode(*(node.children.at(1)), resolver, assigner, identifiers);
     return (iter->second)(lhs, rhs);
   } else if (node.is<ExpressionSpec::Ternary>()) {
-    return std::any();
+    std::any lhs = evalNode(*(node.children.at(0)), resolver, assigner, identifiers);
+    bool cond = std::any_cast<bool>(lhs);
+    return evalNode(*(node.children.at(cond ? 1 : 2)), resolver, assigner, identifiers);
   } else if (node.is<ExpressionSpec::Function>()) {
-    std::any arg = evalNode(*(node.children.at(1)), resolver, assigner);
-    AnyFunc func = std::any_cast<AnyFunc>(evalNode(*(node.children.at(0)), resolver, assigner));
+    std::any arg = evalNode(*(node.children.at(1)), resolver, assigner, identifiers);
+    AnyFunc func = std::any_cast<AnyFunc>(evalNode(*(node.children.at(0)), resolver, assigner, identifiers));
     return func(arg);
   } else if (node.is<ExpressionSpec::Identifier>()) {
-    return resolver(node.content(), reinterpret_cast<uint64_t>(node.m_begin.data));
+    return resolver(id->second, reinterpret_cast<uint64_t>(node.m_begin.data));
   } else if (node.is<ExpressionSpec::HexNumber>()) {
-    return strtol(node.content().c_str(), nullptr, 16);
+    return strtol(id->second.c_str(), nullptr, 16);
   } else if (node.is<ExpressionSpec::Number>()) {
-    return strtol(node.content().c_str(), nullptr, 10);
+    return strtol(id->second.c_str(), nullptr, 10);
   } else if (node.is<ExpressionSpec::String>()) {
-    const std::string& content = node.content();
-    return std::string(content, 1, content.length() - 2);
+    return std::string(node.m_begin.data + 1, node.m_end.data - 1);
+  } else if (node.is<ExpressionSpec::Not>()) {
+    std::any result = evalNode(*(node.children.at(0)), resolver, assigner, identifiers);
+    return !std::any_cast<bool>(result);
   } else {
     return node.content();
   }
@@ -441,7 +454,7 @@ static std::any evalNode(const pegtl::parse_tree::node& node, const ExpressionSp
 std::vector<std::string> splitVariable(const std::string &input);
 
 template <typename T>
-std::function<T(const DynObject &)> makeFuncImpl(const std::string &code) {
+std::function<T(const IScriptQuery &)> makeFuncImpl(const std::string &code) {
   ExpressionSpec::Operators operators;
   // TODO these are raw pointers that will never get cleaned. Since they are required in the
   // function we return, to clean up we'd have to wrap std::function I think, which probably isn't
@@ -450,9 +463,12 @@ std::function<T(const DynObject &)> makeFuncImpl(const std::string &code) {
   auto tree =
     pegtl::parse_tree::parse<ExpressionSpec::Grammar, ExpressionSpec::Selector>(*expressionString, operators).release();
 
-  std::map<uint64_t, std::vector<std::string>> variables;
+  // printNode(*tree);
 
-  return [tree, variables](const DynObject &obj) mutable -> T {
+  std::map<uint64_t, std::vector<std::string>> variables;
+  std::map<std::pair<uint64_t, uint64_t>, std::string> identifiers;
+
+  return [tree, variables, identifiers](const IScriptQuery &obj) mutable -> T {
     ExpressionSpec::VariableResolver resolver = [&obj, &variables](const std::string &key, uint64_t id) -> std::any {
       auto varIter = variables.find(id);
       if (varIter == variables.end()) {
@@ -469,13 +485,13 @@ std::function<T(const DynObject &)> makeFuncImpl(const std::string &code) {
       throw std::runtime_error("attempt to assign in read-only function");
     };
 
-    std::any res = evalNode(*tree, resolver, assigner);
+    std::any res = evalNode(*tree, resolver, assigner, identifiers);
     return flexi_cast<T>(res);
   };
 }
 
 template <typename T>
-std::function<T(DynObject &)> makeFuncMutableImpl(const std::string &code) {
+std::function<T(IScriptQuery &)> makeFuncMutableImpl(const std::string &code) {
   ExpressionSpec::Operators operators;
   // TODO these are raw pointers that will never get cleaned. Since they are required in the
   // function we return, to clean up we'd have to wrap std::function I think, which probably isn't
@@ -484,22 +500,25 @@ std::function<T(DynObject &)> makeFuncMutableImpl(const std::string &code) {
   auto tree =
     pegtl::parse_tree::parse<ExpressionSpec::Grammar, ExpressionSpec::Selector>(*expressionString, operators).release();
 
+  // printNode(*tree);
+
   static std::map<std::string, AnyFunc> functions = {
     { "length", [](const std::any& args) {
-      size_t length = flexi_cast<std::string>(args).length();
-      std::cout << "length " << flexi_cast<std::string>(args) << " - " << length << std::endl;
-      return length;
+      try {
+        return std::any_cast<std::string>(args).length();
+      } catch (const std::bad_any_cast&) {
+        return std::any_cast<std::vector<uint8_t>>(args).size();
+      }
     } },
     { "size", [](const std::any& args) {
-      size_t size = flexi_cast<std::string>(args).length() + 1;
-      std::cout << "size " << flexi_cast<std::string>(args) << " - " << size << std::endl;
-      return size;
+      return flexi_cast<std::string>(args).length() + 1;
     } },
   };
 
   std::map<uint64_t, std::vector<std::string>> variables;
+  std::map<std::pair<uint64_t, uint64_t>, std::string> identifiers;
 
-  return [tree, variables](DynObject &obj) mutable -> T {
+  return [tree, variables, identifiers](IScriptQuery &obj) mutable -> T {
     ExpressionSpec::VariableResolver resolver = [&obj, &variables](const std::string &key, uint64_t id) -> std::any {
       auto funcIter = functions.find(key);
       if (funcIter != functions.end()) {
@@ -519,32 +538,32 @@ std::function<T(DynObject &)> makeFuncMutableImpl(const std::string &code) {
 
     ExpressionSpec::VariableAssigner assigner = [&obj, &variables](const std::string &key, const std::any &value) {
       std::vector<std::string> keySegments = splitVariable(key);
-      ObjectIndex *idx = obj.getIndex();
+      // ObjectIndex *idx = obj.getIndex();
       return obj.setAny(keySegments.begin(), keySegments.end(), value);
     };
 
-    std::any res = evalNode(*tree, resolver, assigner);
+    std::any res = evalNode(*tree, resolver, assigner, identifiers);
     return flexi_cast<T>(res);
   };
 }
 
 template <typename T>
-inline std::function<T(const DynObject &)> makeFunc(const std::string &code) {
+inline std::function<T(const IScriptQuery &)> makeFunc(const std::string &code) {
   return makeFuncImpl<T>(code);
 }
 
 template <>
-inline std::function<ObjSize(const DynObject &)> makeFunc(const std::string &code) {
+inline std::function<int32_t(const IScriptQuery &)> makeFunc(const std::string &code) {
   char *endPtr = nullptr;
   long num = std::strtol(code.c_str(), &endPtr, 10);
   if (*endPtr == '\0') {
-    return [num](const DynObject &) -> ObjSize { return num; };
+    return [num](const IScriptQuery &) -> int32_t { return num; };
   }
 
-  return makeFuncImpl<ObjSize>(code);
+  return makeFuncImpl<int32_t>(code);
 }
 
 template <typename T>
-inline std::function<T(DynObject &)> makeFuncMutable(const std::string &code) {
+inline std::function<T(IScriptQuery &)> makeFuncMutable(const std::string &code) {
   return makeFuncMutableImpl<T>(code);
 }

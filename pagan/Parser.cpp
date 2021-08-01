@@ -1,4 +1,5 @@
 #include "Parser.h"
+#include "TypeSpec.h"
 
 
 Parser::Parser()
@@ -13,11 +14,28 @@ Parser::~Parser()
 void Parser::addFileStream(const char * filePath) {
   std::shared_ptr<IOWrapper> ptr(IOWrapper::fromFile(filePath));
   m_StreamRegistry.add(ptr);
+  m_HasInputData = true;
+}
+
+bool Parser::hasInputData() const {
+  return m_HasInputData;
 }
 
 void Parser::write(const char *filePath, DynObject &obj) const {
   std::shared_ptr<IOWrapper> ptr(IOWrapper::fromFile(filePath, true));
   obj.saveTo(ptr);
+}
+
+std::vector<uint8_t> Parser::objectIndex() const {
+  return m_IndexTable.getObjectIndex();
+}
+
+std::vector<uint8_t> Parser::arrayIndex() const {
+  return m_IndexTable.getArrayIndex();
+}
+
+std::string Parser::getTypeById(uint32_t typeId) const {
+  return m_TypeRegistry->getById(typeId)->getName();
 }
 
 DynObject Parser::getObject(const std::shared_ptr<TypeSpec> &spec, size_t offset, DataStreamId dataStream) {
@@ -34,7 +52,7 @@ std::vector<DynObject> Parser::getList(const std::shared_ptr<TypeSpec>& spec, si
   std::shared_ptr<IOWrapper> stream = m_StreamRegistry.get(dataStream);
 
   // DynObject(const std::shared_ptr<TypeSpec> &spec, const StreamRegistry &streams, ObjectIndexTable *indexTable, ObjectIndex *index, const DynObject *parent)
-  std::shared_ptr<TypeSpec> dummySpec(new TypeSpec("dummy", m_TypeRegistry.get()));
+  std::shared_ptr<TypeSpec> dummySpec(new TypeSpec("dummy", m_TypeRegistry->nextId(), m_TypeRegistry.get()));
   dummySpec->appendProperty("root", spec->getId())
     .withRepeatToEOS();
   ObjectIndex *rootIndex = m_IndexTable.allocateObject(dummySpec, dataStream, offset);

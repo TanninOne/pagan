@@ -1,0 +1,16 @@
+{
+  "name": "node-pagan",
+  "version": "1.0.0",
+  "main": "index.js",
+  "license": "MIT",
+  "scripts": {
+    "configure": "cmake-js configure",
+    "install": "cmake-js compile",
+    "build_test": "cmake-js compile -T tests",
+    "test": "yarn run build_test && ./build/Release/tests.exe"
+  },
+  "dependencies": {
+    "cmake-js": "^6.1.0",
+    "node-addon-api": "*"
+  }
+}

@@ -31,13 +31,18 @@ public:
     return m_Types[m_TypeIds[name]];
   }
 
-  ~TypeRegistry();
-private:
-  TypeRegistry();
+  uint32_t numTypes() const {
+    return m_NextId;
+  }
 
   uint32_t nextId() {
     return m_NextId++;
   }
+
+  ~TypeRegistry();
+private:
+
+  TypeRegistry();
 
 private:
 

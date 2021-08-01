@@ -6,6 +6,8 @@
 #include <streambuf>
 #include <algorithm>
 
+/* UNUSED
+
 class MemoryBuf : public std::streambuf
 {
   std::vector<uint8_t> m_Buffer;
@@ -55,3 +57,5 @@ public:
     return seekoff(pos - pos_type(off_type(0)), std::ios_base::beg, mode);
   }
 };
+*/
+

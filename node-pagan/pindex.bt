@@ -1,0 +1,38 @@
+//------------------------------------------------
+//--- 010 Editor v9.0.1 Binary Template
+//
+//      File: 
+//   Authors: 
+//   Version: 
+//   Purpose: 
+//  Category: 
+// File Mask: 
+//  ID Bytes: 
+//   History: 
+//------------------------------------------------
+
+LittleEndian();
+
+struct ObjectIndex {
+  uint64 offset;
+  uint64 propertiesPtr;
+  uint32 type;
+  uint16 stream;
+  byte size;
+  byte bitmask[(size - 23)];
+};
+
+struct Objects(int numObjects) {
+    ObjectIndex idx[numObjects]<optimize=false>;
+};
+
+struct File {
+  char idx[4];
+  uint64 objectIndexSize;
+  uint64 arrayIndexSize;
+  uint32 numObjects;
+  uint32 numArrays;
+  uint32 typesSize;
+  char types[typesSize];
+  Objects idx(numObjects);
+} file;

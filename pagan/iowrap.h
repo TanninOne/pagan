@@ -31,7 +31,7 @@ public:
   void seekg(std::streamoff pos) {
     if (pos != m_PosG) {
       if ((m_Size != -1) && (pos > m_Size)) {
-        throw std::ios::failure("seek beyond stream end");
+        throw std::ios::failure(fmt::format("seek beyond stream end: {}/{}", pos, m_Size));
       }
       m_PosG = pos;
       m_SeekGPending = true;

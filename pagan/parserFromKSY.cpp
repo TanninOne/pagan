@@ -1,5 +1,6 @@
 #include "parserFromKSY.h"
 #include "expr.h"
+#include "TypeSpec.h"
 #ifndef _NOEXCEPT
 #define _NOEXCEPT noexcept
 #endif
@@ -85,6 +86,10 @@ void addProperties(Parser &parser, NamedTypes &types, std::shared_ptr<TypeSpec> 
       prop.withSize(makeFunc<ObjSize>(entry["size"].as<std::string>()));
     }
 
+    if (entry["debug"].IsDefined()) {
+      prop.withDebug(entry["debug"].as<std::string>());
+    }
+
     if (entry["contents"].IsDefined()) {
       auto contents = entry["contents"];
       std::vector<uint8_t> value;
@@ -120,7 +125,7 @@ void addProperties(Parser &parser, NamedTypes &types, std::shared_ptr<TypeSpec> 
 
       if (!entry["size"].IsDefined()) {
         size_t len = value.size();
-        prop.withSize([len](const DynObject &obj) -> ObjSize { return static_cast<ObjSize>(len); });
+        prop.withSize([len](const IScriptQuery &obj) -> ObjSize { return static_cast<ObjSize>(len); });
       }
       prop.withValidation([value](const std::any &in) {
         try {
@@ -153,8 +158,9 @@ void addProperties(Parser &parser, NamedTypes &types, std::shared_ptr<TypeSpec> 
     if (typeId == TypeId::runtime) {
       std::map<std::variant<std::string, int32_t>, uint32_t> cases = makeCases(typeNode["cases"], types, parser);
 
-      // makeCases either has all keys as strings or all as numbers, so it's enough to check the first
       try {
+        // makeCases either has all keys as strings or all as numbers, so it's enough to check the first
+        int32_t dummy = std::get<int32_t>(cases.begin()->first);
         prop.withTypeSwitch(makeFunc<int32_t>(typeNode["switch-on"].as<std::string>()), cases);
       }
       catch (const std::bad_variant_access&) {

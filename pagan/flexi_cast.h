@@ -33,7 +33,13 @@ struct IntegralCaster {
       { typeid(int32_t), [](const std::any &input) { return static_cast<T>(std::any_cast<int32_t>(input)); } },
       { typeid(int64_t), [](const std::any &input) { return static_cast<T>(std::any_cast<int64_t>(input)); } },
     };
-    return casters.at(type);
+    try {
+      return casters.at(type);
+    }
+    catch (const std::exception& e) {
+      std::cout << "invalid caster type requested " << type.name() << " - " << e.what() << std::endl;
+      throw;
+    }
   }
 };
 

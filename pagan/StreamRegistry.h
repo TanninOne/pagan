@@ -25,6 +25,9 @@ public:
   }
 
   std::shared_ptr<IOWrapper> get(DataStreamId id) const {
+    if (m_Streams.size() < id) {
+      throw std::runtime_error("invalid stream id " + std::to_string(id));
+    }
     return m_Streams[id];
   }
 
