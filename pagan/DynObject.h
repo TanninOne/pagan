@@ -71,7 +71,7 @@ public:
 
   void saveTo(std::shared_ptr<IOWrapper> file);
 
-  void savePropTo(std::shared_ptr<IOWrapper> file, uint32_t typeId, uint8_t* propBuffer);
+  uint8_t *savePropTo(std::shared_ptr<IOWrapper> file, uint32_t typeId, uint8_t* propBuffer);
 
   void debug(size_t indent) const;
 
@@ -131,7 +131,7 @@ public:
   template <typename T> std::vector<T> getList(const char *key) const;
 
   template <typename T> void set(const char *key, const T &value) {
-    LOG_BRACKET_F("set pod {0} to {1}", key, value);
+    LOG_BRACKET_F("set pod {0}", key);
     std::shared_ptr<IOWrapper> write = m_Streams.getWrite();
 
     // find the index offset for the specified attribute
@@ -155,7 +155,7 @@ public:
     LOG_F("write at index {0:x} + {1}", (int64_t)m_ObjectIndex->properties, offset);
 
     type_write(static_cast<TypeId>(typeId), reinterpret_cast<char*>(propBuffer), write, value);
-    onAssign(*this);
+    onAssign(*this, std::any(value));
   }
 
   template <typename T> void setList(const char *key, const std::vector<T> &value);
@@ -211,7 +211,7 @@ inline T DynObject::get(const char* key) const {
   std::shared_ptr<IOWrapper> dataStream = m_Streams.get(m_ObjectIndex->dataStream);
   std::shared_ptr<IOWrapper> writeStream = m_Streams.getWrite();
 
-  return type_read<T>(static_cast<TypeId>(typeId), reinterpret_cast<char*>(propBuffer), dataStream, writeStream);
+  return type_read<T>(static_cast<TypeId>(typeId), reinterpret_cast<char*>(propBuffer), dataStream, writeStream, nullptr);
 }
 
 template<>
@@ -253,7 +253,7 @@ inline std::vector<T> DynObject::getList(const char *key) const {
   std::vector<T> res;
 
   for (int i = 0; i < count; ++i) {
-    res.push_back(type_read<T>(static_cast<TypeId>(typeId), arrayPtr, dataStream, writeStream));
+    res.push_back(type_read<T>(static_cast<TypeId>(typeId), arrayPtr, dataStream, writeStream, &arrayPtr));
   }
 
   return res;
@@ -354,7 +354,7 @@ inline void DynObject::setList(const char *key, const std::vector<T> &value) {
   char *arrayPtr = reinterpret_cast<char*>(m_IndexTable->arrayAddress(newListOffset));
 
   for (int i = 0; i < listCount; ++i) {
-    arrayPtr = type_write(static_cast<TypeId>(typeId), arrayPtr, write, value[i], this);
+    arrayPtr = type_write(static_cast<TypeId>(typeId), arrayPtr, write, value[i]);
   }
 }
 

@@ -212,19 +212,19 @@ private:
 
   static Napi::Value readValue(const Napi::Env &env, TypeId type, char* index, std::shared_ptr<IOWrapper>& data, std::shared_ptr<IOWrapper>& write) {
     switch (type) {
-    case TypeId::int8: return Napi::Value::From(env, type_read<int8_t>(type, index, data, write));
-    case TypeId::int16: return Napi::Value::From(env, type_read<int16_t>(type, index, data, write));
-    case TypeId::int32: return Napi::Value::From(env, type_read<int32_t>(type, index, data, write));
-    case TypeId::int64: return Napi::Value::From(env, type_read<int64_t>(type, index, data, write));
-    case TypeId::uint8: return Napi::Value::From(env, type_read<uint8_t>(type, index, data, write));
-    case TypeId::uint16: return Napi::Value::From(env, type_read<uint16_t>(type, index, data, write));
-    case TypeId::uint32: return Napi::Value::From(env, type_read<uint32_t>(type, index, data, write));
-    case TypeId::uint64: return Napi::Value::From(env, type_read<uint64_t>(type, index, data, write));
-    case TypeId::float32_iee754: return Napi::Value::From(env, type_read<float>(type, index, data, write));
-    case TypeId::stringz: return Napi::Value::From(env, type_read<std::string>(type, index, data, write));
-    case TypeId::string: return Napi::Value::From(env, type_read<std::string>(type, index, data, write));
+    case TypeId::int8: return Napi::Value::From(env, type_read<int8_t>(type, index, data, write, nullptr));
+    case TypeId::int16: return Napi::Value::From(env, type_read<int16_t>(type, index, data, write, nullptr));
+    case TypeId::int32: return Napi::Value::From(env, type_read<int32_t>(type, index, data, write, nullptr));
+    case TypeId::int64: return Napi::Value::From(env, type_read<int64_t>(type, index, data, write, nullptr));
+    case TypeId::uint8: return Napi::Value::From(env, type_read<uint8_t>(type, index, data, write, nullptr));
+    case TypeId::uint16: return Napi::Value::From(env, type_read<uint16_t>(type, index, data, write, nullptr));
+    case TypeId::uint32: return Napi::Value::From(env, type_read<uint32_t>(type, index, data, write, nullptr));
+    case TypeId::uint64: return Napi::Value::From(env, type_read<uint64_t>(type, index, data, write, nullptr));
+    case TypeId::float32_iee754: return Napi::Value::From(env, type_read<float>(type, index, data, write, nullptr));
+    case TypeId::stringz: return Napi::Value::From(env, type_read<std::string>(type, index, data, write, nullptr));
+    case TypeId::string: return Napi::Value::From(env, type_read<std::string>(type, index, data, write, nullptr));
     case TypeId::bytes: {
-      std::vector<uint8_t> bytes = type_read<std::vector<uint8_t>>(type, index, data, write);
+      std::vector<uint8_t> bytes = type_read<std::vector<uint8_t>>(type, index, data, write, nullptr);
 
       uint8_t* buffer = new uint8_t[bytes.size()];
       memcpy(buffer, bytes.data(), bytes.size());
@@ -412,7 +412,12 @@ private:
     std::string filePath = info[0].ToString().Utf8Value();
     Napi::Object obj = info[1].As<Napi::Object>();
     DynObjectWrap* objWrap = DynObjectWrap::Unwrap(obj);
-    m_Wrappee->write(filePath.c_str(), *(objWrap->value().get()));
+    try {
+      m_Wrappee->write(filePath.c_str(), *(objWrap->value().get()));
+    }
+    catch (const std::exception& e) {
+      throw Napi::Error::New(info.Env(), e.what());
+    }
     return info.Env().Undefined();
   }
 
@@ -483,7 +488,12 @@ Napi::Object ParserWrap::Init(Napi::Env env, Napi::Object exports) {
 ParserWrap::ParserWrap(const Napi::CallbackInfo& info)
   : Napi::ObjectWrap<ParserWrap>(info) {
   Napi::String value = info[0].As<Napi::String>();
-  m_Wrappee = parserFromKSY(value.Utf8Value().c_str());
+  try {
+    m_Wrappee = parserFromKSY(value.Utf8Value().c_str());
+  }
+  catch (const std::exception& e) {
+    Napi::Error::New(info.Env(), e.what()).ThrowAsJavaScriptException();
+  }
 }
 
 static Napi::Object parserFromKSYN(const Napi::CallbackInfo &info) {

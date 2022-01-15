@@ -491,7 +491,7 @@ std::function<T(const IScriptQuery &)> makeFuncImpl(const std::string &code) {
 }
 
 template <typename T>
-std::function<T(IScriptQuery &)> makeFuncMutableImpl(const std::string &code) {
+std::function<T(IScriptQuery &, const std::any&)> makeFuncMutableImpl(const std::string &code) {
   ExpressionSpec::Operators operators;
   // TODO these are raw pointers that will never get cleaned. Since they are required in the
   // function we return, to clean up we'd have to wrap std::function I think, which probably isn't
@@ -518,8 +518,12 @@ std::function<T(IScriptQuery &)> makeFuncMutableImpl(const std::string &code) {
   std::map<uint64_t, std::vector<std::string>> variables;
   std::map<std::pair<uint64_t, uint64_t>, std::string> identifiers;
 
-  return [tree, variables, identifiers](IScriptQuery &obj) mutable -> T {
-    ExpressionSpec::VariableResolver resolver = [&obj, &variables](const std::string &key, uint64_t id) -> std::any {
+  return [tree, variables, identifiers](IScriptQuery &obj, const std::any& value) mutable -> T {
+    ExpressionSpec::VariableResolver resolver = [&obj, &variables, &value](const std::string &key, uint64_t id) -> std::any {
+      if (key == "value") {
+        return value;
+      }
+
       auto funcIter = functions.find(key);
       if (funcIter != functions.end()) {
         return funcIter->second;
@@ -564,6 +568,6 @@ inline std::function<int32_t(const IScriptQuery &)> makeFunc(const std::string &
 }
 
 template <typename T>
-inline std::function<T(IScriptQuery &)> makeFuncMutable(const std::string &code) {
+inline std::function<T(IScriptQuery &, const std::any&)> makeFuncMutable(const std::string &code) {
   return makeFuncMutableImpl<T>(code);
 }

@@ -10,7 +10,7 @@ TypeSpec::~TypeSpec()
 {
 }
 
-void TypeSpec::indexEOSArray(const TypeProperty& prop, ObjectIndexTable* indexTable, uint8_t* buffer, const DynObject* obj, DataStreamId dataStream, std::shared_ptr<IOWrapper> data, std::streampos streamLimit) {
+ObjSize TypeSpec::indexEOSArray(const TypeProperty& prop, ObjectIndexTable* indexTable, uint8_t* buffer, const DynObject* obj, DataStreamId dataStream, std::shared_ptr<IOWrapper> data, std::streampos streamLimit) {
   // std::vector<uint8_t> tmpArrayBuffer(8 * NUM_STATIC_PROPERTIES);
   // uint8_t *curPos = &tmpArrayBuffer[0];
   // uint8_t *endPos = curPos + tmpArrayBuffer.size();
@@ -59,6 +59,8 @@ void TypeSpec::indexEOSArray(const TypeProperty& prop, ObjectIndexTable* indexTa
   if (tmpBuffer != m_BaseBuffer) {
     delete[] tmpBuffer;
   }
+
+  return count;
 }
 
 void TypeSpec::writeIndex(ObjectIndexTable *indexTable, ObjectIndex *objIndex, std::shared_ptr<IOWrapper> data, const StreamRegistry &streams, DynObject *obj, std::streampos streamLimit) {

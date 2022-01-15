@@ -61,7 +61,10 @@ void addProperties(Parser &parser, NamedTypes &types, std::shared_ptr<TypeSpec> 
 
   for (size_t i = 0; i < spec.size(); ++i) {
     YAML::Node entry = spec[i];
-    std::string name = entry["id"].as<std::string>();
+    YAML::Node idNode = entry["id"];
+    std::string name = idNode.IsDefined()
+      ? idNode.as<std::string>()
+      : std::to_string(i);
 
     uint32_t typeId;
     YAML::Node typeNode = entry["type"];
@@ -81,7 +84,7 @@ void addProperties(Parser &parser, NamedTypes &types, std::shared_ptr<TypeSpec> 
       typeId = getNamedType(types, parser, typeIdStr);
     }
 
-    TypePropertyBuilder prop = type->appendProperty(entry["id"].as<std::string>().c_str(), typeId);
+    TypePropertyBuilder prop = type->appendProperty(name.c_str(), typeId);
     if (entry["size"].IsDefined()) {
       prop.withSize(makeFunc<ObjSize>(entry["size"].as<std::string>()));
     }

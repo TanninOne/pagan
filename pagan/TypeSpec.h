@@ -63,7 +63,7 @@ static ValidationFunc validFunc = [](const std::any& value) -> bool {
   return true;
 };
 
-static AssignCB nop = [] (IScriptQuery &object) {
+static AssignCB nop = [] (IScriptQuery &object, const std::any& value) {
 };
 
 class TypePropertyBuilder {
@@ -148,12 +148,12 @@ public:
     return m_StaticSize;
   }
 
-  void indexEOSArray(const TypeProperty &prop,
-                     ObjectIndexTable *indexTable,
-                     uint8_t *buffer,
-                     const DynObject *obj,
-                     DataStreamId dataStream,
-                     std::shared_ptr<IOWrapper> data,
+  ObjSize indexEOSArray(const TypeProperty &prop,
+                        ObjectIndexTable *indexTable,
+                        uint8_t *buffer,
+                        const DynObject *obj,
+                        DataStreamId dataStream,
+                        std::shared_ptr<IOWrapper> data,
     std::streampos streamLimit);
 
   /**

@@ -40,6 +40,7 @@ string(REGEX REPLACE "[\r\n\"]" "" NODE_ADDON_API_DIR ${NODE_ADDON_API_DIR})
 target_include_directories(${PROJECT_NAME} PRIVATE ${NODE_ADDON_API_DIR} ${EXTERN}/PEGTL/include ${EXTERN}/yaml-cpp/include)
 
 add_definitions(-DNAPI_VERSION=3 -DNOLOG)
+# add_definitions(-DNAPI_VERSION=3)
 
 Include(FetchContent)
 
@@ -56,7 +57,7 @@ if (NOT Catch2_POPULATED)
 endif()
 
 file(GLOB TEST_FILES "../tests/*.cpp")
-add_executable(tests ${TEST_FILES} ../pagan/expr.cpp ../pagan/iowrap.cpp ../pagan/format.cc ../pagan/TypeSpec.cpp ../pagan/DynObject.cpp ../pagan/TypeRegistry.cpp ../pagan/typecast.cpp ../pagan/objectindex.cpp ../pagan/ObjectIndexTable.cpp ../pagan/StreamRegistry.cpp)
+add_executable(tests ${TEST_FILES} ../pagan/expr.cpp ../pagan/iowrap.cpp ../pagan/format.cc ../pagan/TypeSpec.cpp ../pagan/DynObject.cpp ../pagan/TypeRegistry.cpp ../pagan/typecast.cpp ../pagan/objectindex.cpp ../pagan/ObjectIndexTable.cpp ../pagan/StreamRegistry.cpp ../pagan/util.cpp)
 target_include_directories(tests PRIVATE ${Catch2_SOURCE_DIR}/single_include/catch2)
 target_include_directories(tests PRIVATE ${EXTERN}/PEGTL/include ${EXTERN}/yaml-cpp/include)
 target_link_libraries(tests PRIVATE Catch2::Catch2)

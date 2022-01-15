@@ -29,7 +29,7 @@ class DynObject;
 
 typedef int32_t ObjSize;
 typedef std::function<ObjSize(const IScriptQuery &object)> SizeFunc;
-typedef std::function<void(IScriptQuery &object)> AssignCB;
+typedef std::function<void(IScriptQuery &object, const std::any &value)> AssignCB;
 typedef std::function<bool(const IScriptQuery &object)> ConditionFunc;
 typedef std::function<bool(const std::any &value)> ValidationFunc;
 typedef std::function<std::variant<std::string, int32_t>(const IScriptQuery &object)> SwitchFunc;

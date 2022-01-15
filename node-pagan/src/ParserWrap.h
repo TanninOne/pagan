@@ -18,11 +18,15 @@ public:
   ParserWrap(const Napi::CallbackInfo& info)
     : Napi::ObjectWrap<ParserWrap>(info)
   {
-    m_Wrappee = parserFromKSY(info[0].ToString().Utf8Value().c_str());
-    // m_Wrappee->addFileStream
-    // m_Wrappee->getObject()
-    // m_Wrappee->getType
-    // m_Wrappee->write
+    try {
+      m_Wrappee = parserFromKSY(info[0].ToString().Utf8Value().c_str());
+    }
+    catch (const std::exception& e) {
+      Napi::Error::New(info.Env(), e.what()).ThrowAsJavaScriptException();
+    }
+    catch (...) {
+      Napi::Error::New(info.Env(), "foobar").ThrowAsJavaScriptException();
+    }
   }
 
 private:

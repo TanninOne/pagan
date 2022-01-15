@@ -6,7 +6,7 @@
 thread_local int LogBracket::s_Indent = 0;
 thread_local RingLog LogBracket::s_RingLog;
 
-static const int MAX_DEPTH = 2;
+static const int MAX_DEPTH = 10;
 
 void debugStream(const std::shared_ptr<IOWrapper>& str) {
   std::streamoff posG = str->tellg();
@@ -45,13 +45,13 @@ LogBracket LogBracket::create(const std::string & message) {
 }
 
 void LogBracket::log(const std::string & message) {
-
+#ifdef RING_LOG
   s_RingLog.log(indent() + message);
-  /*
+#else
   if (s_Indent <= MAX_DEPTH) {
     std::cout << indent() << message << std::endl;
   }
-  */
+#endif
 }
 
 void LogBracket::print() {

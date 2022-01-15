@@ -62,7 +62,7 @@ TEST_CASE("can make getter func", "[expr]") {
 TEST_CASE("can make setter func", "[expr]") {
   TestQuery query(std::any(2));
   auto setter = makeFuncMutable<bool>("x = 2");
-  REQUIRE(setter(query) == true);
+  REQUIRE(setter(query, std::any()) == true);
   REQUIRE(query.wasAssigned("x"));
   REQUIRE(query.numGetCalls() == 0);
   REQUIRE(query.numSetCalls() == 1);
@@ -141,7 +141,7 @@ TEST_CASE("setter can access block size", "[expr]") {
 
   auto func = makeFuncMutable<bool>("y = length(foobar)");
 
-  REQUIRE(func(query) == true);
+  REQUIRE(func(query, std::any()) == true);
   REQUIRE(flexi_cast<int>(query.getAny("y")) == 6);
 }
 
