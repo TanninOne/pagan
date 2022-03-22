@@ -3,9 +3,18 @@
 
 static const int INIT_TYPES_LENGTH = 64;
 
+static const char* BaseTypeNames[] = {
+  "int8", "int16", "int32", "int64",
+  "uint8", "uint16", "uint32", "uint64", "bits",
+  "float", "string", "stringz", "bytes", "runtime"
+};
+
 TypeRegistry::TypeRegistry()
 {
   m_Types.resize(INIT_TYPES_LENGTH);
+  for (int i = 0; i < custom; ++i) {
+    m_Types[i] = std::shared_ptr<TypeSpec>(new TypeSpec(BaseTypeNames[i], i, this));
+  }
 }
 
 std::shared_ptr<TypeSpec> TypeRegistry::create(const char *name) {
@@ -15,7 +24,7 @@ std::shared_ptr<TypeSpec> TypeRegistry::create(const char *name) {
   }
   uint32_t typeId = nextId();
   std::shared_ptr<TypeSpec> res(new TypeSpec(name, typeId, this));
-  if (m_Types.size() < typeId) {
+  if (m_Types.size() <= typeId) {
     m_Types.resize(m_Types.size() * 2);
   }
   m_Types[typeId] = res;

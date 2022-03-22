@@ -31,6 +31,7 @@ char *type_index_obj(char *index, std::shared_ptr<IOWrapper> &data, std::streamp
 template <> VAL_TYPE type_read(TypeId type, char *index, std::shared_ptr<IOWrapper> &data, std::shared_ptr<IOWrapper> &write, char **indexAfter);\
 template <> char *type_write(TypeId type, char *index, std::shared_ptr<IOWrapper> &write, const VAL_TYPE &value);
 
+char* type_index_bits(TypeId typeId, uint8_t offset, uint8_t size, char* index, std::shared_ptr<IOWrapper>& data, const DynObject* obj, const std::string& debug);
 
 std::any type_read_any(TypeId type, char *index, std::shared_ptr<IOWrapper> &data, std::shared_ptr<IOWrapper> &write, char **indexAfter = nullptr);
 

@@ -12,6 +12,7 @@
 
 #include "IScriptQuery.h"
 #include "flexi_cast.h"
+#include "format.h"
 
 namespace pegtl = tao::TAO_PEGTL_NAMESPACE;
 
@@ -185,13 +186,15 @@ namespace ExpressionSpec {
       insert(">", Order(8), [](const std::any &lhs, const std::any &rhs) { return flexi_cast<int64_t>(lhs) > flexi_cast<int64_t>(rhs); });
       insert("<=", Order(8), [](const std::any &lhs, const std::any &rhs) { return flexi_cast<int64_t>(lhs) <= flexi_cast<int64_t>(rhs); });
       insert(">=", Order(8), [](const std::any &lhs, const std::any &rhs) { return flexi_cast<int64_t>(lhs) >= flexi_cast<int64_t>(rhs); });
-      insert("==", Order(9), [](const std::any& lhs, const std::any& rhs) { std::cout << flexi_cast<int64_t>(lhs) << "==" << flexi_cast<int64_t>(rhs) << std::endl; return any_equal(lhs, rhs); });
+      insert("==", Order(9), [](const std::any& lhs, const std::any& rhs) { return any_equal(lhs, rhs); });
       insert("!=", Order(9), [](const std::any &lhs, const std::any &rhs) { return !any_equal(lhs, rhs); });
       insert("&", Order(10), [](const std::any &lhs, const std::any &rhs) { return flexi_cast<int64_t>(lhs) & flexi_cast<int64_t>(rhs); });
       insert("^", Order(11), [](const std::any &lhs, const std::any &rhs) { return flexi_cast<int64_t>(lhs) ^ flexi_cast<int64_t>(rhs); });
       insert("|", Order(12), [](const std::any &lhs, const std::any &rhs) { return flexi_cast<int64_t>(lhs) | flexi_cast<int64_t>(rhs); });
       insert("&&", Order(13), [](const std::any &lhs, const std::any &rhs) { return flexi_cast<bool>(lhs) && flexi_cast<bool>(rhs); });
+      insert("and", Order(13), [](const std::any &lhs, const std::any &rhs) { return flexi_cast<bool>(lhs) && flexi_cast<bool>(rhs); });
       insert("||", Order(14), [](const std::any &lhs, const std::any &rhs) { return flexi_cast<bool>(lhs) || flexi_cast<bool>(rhs); });
+      insert("or", Order(14), [](const std::any &lhs, const std::any &rhs) { return flexi_cast<bool>(lhs) || flexi_cast<bool>(rhs); });
     }
 
     void insert(const std::string& name, const Order order, const std::function<std::any(std::any, std::any) > &func)
@@ -265,7 +268,7 @@ namespace ExpressionSpec {
 
   struct Number : seq<opt<one<'+', '-'>>, plus<digit>> {};
   struct HexNumber : seq<one<'0'>, one<'x'>, plus<xdigit>> {};
-  struct String : seq<one<'"'>, star<not_one<'"'>>, one<'"'>> {};
+  struct String : sor<seq<one<'"'>, star<not_one<'"'>>, one<'"'>>, seq<one<'\''>, star<not_one<'\''>>, one<'\''>>> {};
   struct Identifier : seq<sor<alpha, one<'_'>>, star<sor<alnum, one<'.'>, one<'_'>>>> {};
   struct Expression;
   struct Function;
@@ -553,7 +556,12 @@ std::function<T(IScriptQuery &, const std::any&)> makeFuncMutableImpl(const std:
 
 template <typename T>
 inline std::function<T(const IScriptQuery &)> makeFunc(const std::string &code) {
-  return makeFuncImpl<T>(code);
+  try {
+    return makeFuncImpl<T>(code);
+  }
+  catch (const std::exception& e) {
+    throw std::runtime_error(fmt::format("failed to compile function \"{}\"", code).c_str());
+  }
 }
 
 template <>
@@ -564,10 +572,20 @@ inline std::function<int32_t(const IScriptQuery &)> makeFunc(const std::string &
     return [num](const IScriptQuery &) -> int32_t { return num; };
   }
 
-  return makeFuncImpl<int32_t>(code);
+  try {
+    return makeFuncImpl<int32_t>(code);
+  }
+  catch (const std::exception& e) {
+    throw std::runtime_error(fmt::format("failed to compile function \"{}\"", code).c_str());
+  }
 }
 
 template <typename T>
 inline std::function<T(IScriptQuery &, const std::any&)> makeFuncMutable(const std::string &code) {
-  return makeFuncMutableImpl<T>(code);
+  try {
+    return makeFuncMutableImpl<T>(code);
+  }
+  catch (const std::exception& e) {
+    throw std::runtime_error(fmt::format("failed to compile function \"{}\"", code).c_str());
+  }
 }

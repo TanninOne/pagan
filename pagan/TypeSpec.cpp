@@ -44,10 +44,10 @@ ObjSize TypeSpec::indexEOSArray(const TypeProperty& prop, ObjectIndexTable* inde
     // if (tmpBuffer != m_BaseBuffer) { delete [] tmpBuffer; }
     // throw e;
   }
-  // why the + 1?
-  // count = j + 1;
+
   ObjSize count = j;
   uint32_t arraySize = static_cast<uint32_t>(curPos - tmpBuffer);
+  LOG_F("indexed eos array with {0} items", count);
   // std::cout << "array size " << arraySize << std::endl;
   // create a sufficiently sized array index
   ObjSize arrayOffset = indexTable->allocateArray(arraySize);
@@ -97,7 +97,8 @@ void TypeSpec::writeIndex(ObjectIndexTable *indexTable, ObjectIndex *objIndex, s
     TypeProperty &prop = m_Sequence[i];
 
     if (!prop.index) {
-      LOG_F("make index func for {0}", prop.typeId);
+      std::string typeName = m_Registry->getById(prop.typeId)->getName();
+      LOG_F("make index func for {0}", typeName);
       prop.index = makeIndexFunc(prop, streams, indexTable);
     }
 
@@ -197,6 +198,8 @@ uint8_t *TypeSpec::indexCustom(const TypeProperty &prop, uint32_t typeId,
     throw std::runtime_error("end of stream");
   }
 
+  LOG_F("custom type static size {}", staticSize);
+
   char *res = nullptr;
   if (staticSize >= 0) {
     // static size so the object itself doesn't have to be indexed at this time
@@ -252,6 +255,8 @@ auto TypeSpec::makeIndexFunc(const TypeProperty &prop,
                              -> IndexFunc {
   if (prop.typeId == TypeId::runtime) {
     return [this, prop, indexTable, streams](uint8_t *index, const DynObject *obj, DataStreamId dataStream, std::shared_ptr<IOWrapper> data, std::streampos streamLimit) -> uint8_t* {
+      // TODO: currently assumes a runtime type never resolves to bit - which I really hope is true
+      this->m_BitmaskOffset = 0;
       std::variant<std::string, int32_t> caseId = prop.switchFunc(*obj);
       auto iter = prop.switchCases.find(caseId);
       if (iter == prop.switchCases.end()) {
@@ -267,7 +272,7 @@ auto TypeSpec::makeIndexFunc(const TypeProperty &prop,
         }
       }
       uint32_t typeId = iter->second;
-      LOG_F("index runtime type: {}", typeId);
+      LOG_F("index runtime type: {}", m_Registry->getById(typeId)->getName());
 
       memcpy(index, reinterpret_cast<uint8_t*>(&typeId), sizeof(uint32_t));
       index += sizeof(uint32_t);
@@ -280,16 +285,35 @@ auto TypeSpec::makeIndexFunc(const TypeProperty &prop,
         return reinterpret_cast<uint8_t*>(res);
       }
     };
-  } else if (prop.typeId >= TypeId::custom) {
+  }
+  else if (prop.typeId >= TypeId::custom) {
     // index custom type
-    return [this, prop, indexTable, streams](uint8_t *index, const DynObject *obj, DataStreamId dataStream, std::shared_ptr<IOWrapper> data, std::streampos streamLimit) -> uint8_t* {
-      LOG_F("index custom type {}", prop.typeId);
+    return [this, prop, indexTable, streams](uint8_t* index, const DynObject* obj, DataStreamId dataStream, std::shared_ptr<IOWrapper> data, std::streampos streamLimit) -> uint8_t* {
+      this->m_BitmaskOffset = 0;
+      LOG_F("index custom type {}", m_Registry->getById(prop.typeId)->getName());
       return this->indexCustom(prop, prop.typeId, streams, indexTable, index, obj, dataStream, data, streamLimit);
+    };
+  } else if (prop.typeId == TypeId::bits) {
+    return [=](uint8_t* index, const DynObject* obj, DataStreamId dataStream, std::shared_ptr<IOWrapper> data, std::streampos streamLimit) -> uint8_t* {
+      uint32_t size = prop.size(*obj);
+      LOG_F("index bitmask off {}, size {}", this->m_BitmaskOffset, size);
+      if ((static_cast<uint64_t>(this->m_BitmaskOffset) + size) > sizeof(uint32_t) * 8) {
+        this->m_BitmaskOffset = 0;
+      }
+
+      if (this->m_BitmaskOffset > 0) {
+        data->seekg(data->tellg() - 4);
+      }
+
+      char *res = type_index_bits(static_cast<TypeId>(prop.typeId), this->m_BitmaskOffset, size, reinterpret_cast<char*>(index), data, obj, prop.debug);
+      this->m_BitmaskOffset += size;
+      return reinterpret_cast<uint8_t*>(res);
     };
   } else {
     // index pod
     return [=](uint8_t *index, const DynObject *obj, DataStreamId dataStream, std::shared_ptr<IOWrapper> data, std::streampos streamLimit) -> uint8_t* {
-      LOG_F("index pod type {}", prop.typeId);
+      this->m_BitmaskOffset = 0;
+      LOG_F("index pod type {}", m_Registry->getById(prop.typeId)->getName());
       char *res = type_index(static_cast<TypeId>(prop.typeId), prop.size, reinterpret_cast<char*>(index), data, obj, prop.debug);
       return reinterpret_cast<uint8_t*>(res);
     };

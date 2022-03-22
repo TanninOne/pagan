@@ -6,7 +6,7 @@
 thread_local int LogBracket::s_Indent = 0;
 thread_local RingLog LogBracket::s_RingLog;
 
-static const int MAX_DEPTH = 10;
+static const int MAX_DEPTH = 15;
 
 void debugStream(const std::shared_ptr<IOWrapper>& str) {
   std::streamoff posG = str->tellg();

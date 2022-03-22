@@ -200,7 +200,9 @@ public:
 
         uint8_t *curPos = indexTable->arrayAddress(arrayOffset);
 
+        LOG_F("index array of items {}", count);
         for (int j = 0; j < count; ++j) {
+          LOG_F("index array item {}/{}", j, count);
           curPos = prop.index(curPos, obj, dataStream, data, streamLimit);
         }
       }
@@ -208,7 +210,7 @@ public:
     }
     else {
       // no list, index single item
-      LOG_F("index prop {} (type {}) at {}", prop.key, prop.typeId, data->tellg());
+      LOG_F("index prop {} (type {}) at {}", prop.key, m_Registry->getById(prop.typeId)->getName(), data->tellg());
       return prop.index(buffer, obj, dataStream, data, streamLimit);
     }
   }
@@ -290,6 +292,7 @@ private:
       case TypeId::uint16: return sizeof(uint16_t);
       case TypeId::uint32: return sizeof(uint32_t);
       case TypeId::uint64: return sizeof(uint64_t);
+      case TypeId::bits: return sizeof(uint64_t);
       case TypeId::float32_iee754: return sizeof(float);
       // string stored as offset in the data stream from the beginning of the object
       case TypeId::stringz: return sizeof(int32_t);
@@ -304,6 +307,11 @@ private:
   void addStaticSize(uint32_t typeId) {
     if (m_StaticSize < 0) {
       // the size can already not be determined statically
+      return;
+    }
+
+    if (typeId == TypeId::bits) {
+      m_StaticSize = -1;
       return;
     }
 
@@ -343,6 +351,8 @@ private:
   uint16_t m_IndexSize{0};
   uint32_t m_Id;
   int32_t m_StaticSize;
+
+  uint32_t m_BitmaskOffset{0};
 
   uint8_t m_BaseBuffer[8 * NUM_STATIC_PROPERTIES];
 

@@ -22,7 +22,7 @@ struct ObjectIndex
 
 static const int MIN_OBJECT_INDEX_SIZE = sizeof(ObjectIndex) - 1;
 
-bool isBitSet(const ObjectIndex *index, int bit);
+bool isBitSet(const ObjectIndex *index, int bits);
 
 ObjectIndex *initIndex(uint8_t *memory, const std::shared_ptr<TypeSpec> type, uint16_t dataStream, uint64_t dataOffset);
 

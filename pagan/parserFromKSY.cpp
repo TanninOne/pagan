@@ -5,6 +5,7 @@
 #define _NOEXCEPT noexcept
 #endif
 #include <yaml-cpp/yaml.h>
+#include <charconv>
 
 typedef std::map<std::string, uint32_t> NamedTypes;
 
@@ -35,7 +36,11 @@ std::map<std::variant<std::string, int32_t>, uint32_t> makeCases(const YAML::Nod
     std::map<std::variant<std::string, int32_t>, uint32_t> result;
 
     for (YAML::const_iterator it = spec.begin(); it != spec.end(); ++it) {
-      result[it->first.as<std::string>()] = getNamedType(types, parser, it->second.as<std::string>());
+      std::string key = it->first.as<std::string>();
+      if ((key[0] == '"') && (*key.crbegin() == '"')) {
+        key = key.substr(1, key.length() - 2);
+      }
+      result[key] = getNamedType(types, parser, it->second.as<std::string>());
     }
 
     return result;
@@ -67,6 +72,7 @@ void addProperties(Parser &parser, NamedTypes &types, std::shared_ptr<TypeSpec> 
       : std::to_string(i);
 
     uint32_t typeId;
+    uint32_t fixedSize = 0;
     YAML::Node typeNode = entry["type"];
     if (!typeNode.IsDefined()) {
       typeId = TypeId::bytes;
@@ -81,12 +87,36 @@ void addProperties(Parser &parser, NamedTypes &types, std::shared_ptr<TypeSpec> 
     }
     else {
       std::string typeIdStr = typeNode.as<std::string>();
-      typeId = getNamedType(types, parser, typeIdStr);
+      LOG_F("typeid {}", typeIdStr);
+      if ((typeIdStr[0] == 'b') && (typeIdStr.length() <= 3)) {
+        LOG_F("might be bits?");
+
+        // might be bits but can't be sure yet
+        const char* buf = typeIdStr.c_str();
+        int bitCount = 0;
+        auto [ptr, ec] { std::from_chars(buf + 1, buf + typeIdStr.length(), bitCount) };
+        LOG_F("might be bits? {} - {}", ptr, (int)ec);
+        if ((ec == std::errc()) && (*ptr == '\0')) {
+          LOG_F("yes bits {}", bitCount);
+          typeId = bits;
+          fixedSize = bitCount;
+        }
+        else {
+          // custom type after all
+          typeId = getNamedType(types, parser, typeIdStr);
+        }
+      }
+      else {
+        typeId = getNamedType(types, parser, typeIdStr);
+      }
     }
 
     TypePropertyBuilder prop = type->appendProperty(name.c_str(), typeId);
     if (entry["size"].IsDefined()) {
       prop.withSize(makeFunc<ObjSize>(entry["size"].as<std::string>()));
+    }
+    else if (fixedSize > 0) {
+      prop.withSize(makeFunc<ObjSize>(std::to_string(fixedSize)));
     }
 
     if (entry["debug"].IsDefined()) {
@@ -156,7 +186,16 @@ void addProperties(Parser &parser, NamedTypes &types, std::shared_ptr<TypeSpec> 
       prop.withProcessing(entry["process"].as<std::string>());
     }
     if (entry["repeat"].IsDefined()) {
-      prop.withRepeatToEOS();
+      auto repeatType = entry["repeat"].as<std::string>();
+      if (repeatType == "eos") {
+        prop.withRepeatToEOS();
+      }
+      else if (repeatType == "expr") {
+        prop.withCount(makeFunc<int32_t>(entry["repeat-expr"].as<std::string>()));
+      }
+      else {
+        throw std::runtime_error("unsupported repeat function");
+      }
     }
     if (typeId == TypeId::runtime) {
       std::map<std::variant<std::string, int32_t>, uint32_t> cases = makeCases(typeNode["cases"], types, parser);
@@ -243,6 +282,7 @@ void initBaseTypes(NamedTypes &types) {
   types["s4"] = TypeId::int32;
   types["s8"] = TypeId::int64;
   types["f4"] = TypeId::float32;
+  types["b*"] = TypeId::bits;
   types["bytes"] = TypeId::bytes;
 }
 

@@ -33,8 +33,8 @@ size_t attributeOffset(const std::shared_ptr<IOWrapper>& index, int attribute) {
 }
 */
 
-bool isBitSet(const ObjectIndex *index, int bit) {
-  return index->bitmask[bit / 8] & (1 << (bit % 8));
+bool isBitSet(const ObjectIndex *index, int bits) {
+  return index->bitmask[bits / 8] & (1 << (bits % 8));
 }
 
 ObjectIndex *initIndex(uint8_t *memory, const std::shared_ptr<TypeSpec> type, uint16_t dataStream, uint64_t dataOffset) {

@@ -15,6 +15,7 @@ enum TypeId {
   uint16,
   uint32,
   uint64,
+  bits,
   float32_iee754,
   float32 = float32_iee754,
   string,

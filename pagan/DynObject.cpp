@@ -49,8 +49,8 @@ void DynObject::saveTo(std::shared_ptr<IOWrapper> file) {
 
       if (arrayProp.count == COUNT_EOS) {
         // previously unindexed array. Do we actually have to do this?
-        // If we can rely on an EOS array actually ending on the last byte of the stream,
-        // we can copy it blindly
+        // If we could rely on an EOS array actually ending on the last byte of the stream,
+        // we could copy it blindly
         const TypeProperty& prop = getProperty(key.c_str());
 
         std::shared_ptr<IOWrapper> data = getDataStream();

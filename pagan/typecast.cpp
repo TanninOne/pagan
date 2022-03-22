@@ -208,51 +208,10 @@ template <> char *type_index_impl<std::string>(char *index, std::shared_ptr<IOWr
 
   static bool paused = false;
 
-  /*
-  if ((offset > 16000000) && !paused) {
-    std::cout << "paused" << std::endl;
-    paused = true;
-    ::Sleep(10000);
-  }
-  */
-
   memcpy(index, &offset, sizeof(int32_t));
 
   if (sizeField) {
     int32_t size = sizeFunc(*obj);
-
-    /*
-    if (!debug.empty()) {
-      std::string content(static_cast<size_t>(size + 1), '\0');
-      data->read(&content[0], size);
-      std::cout << debug << ": " << content << "\n";
-
-      if ((size == 4)
-        && ((content[3] < 'A') || (content[3] > 'Z'))
-        && ((content[3] < '0') || (content[3] > '9'))
-        && (content[3] != '_')) {
-        throw std::exception("invalid esp type flag");
-      }
-    } else if (size == 4) {
-      char temp[5];
-      std::streampos pos = data->tellg();
-      data->read(temp, 4);
-      temp[4] = '\0';
-      static std::string lastStr;
-      static std::streampos lastPos;
-
-      if ((size == 4)
-        && ((temp[3] < 'A') || (temp[3] > 'Z'))
-        && ((temp[3] < '0') || (temp[3] > '9'))
-        && (temp[3] != '_')) {
-        if (memcmp(temp, "\0\0\0\0", 4) != 0) {
-          throw std::exception("invalid esp type flag");
-        }
-      }
-      lastStr = temp;
-      lastPos = pos;
-    }
-    */
 
     data->seekg(static_cast<std::streamoff>(offset) + size);
     memcpy(index + sizeof(int32_t), &size, sizeof(int32_t));
@@ -290,6 +249,23 @@ template <> char *type_index_impl<std::vector<uint8_t>>(char *index, std::shared
   return index;
 }
 
+char* type_index_bits(TypeId typeId, uint8_t offset, uint8_t size, char * index, std::shared_ptr<IOWrapper> & data, const DynObject * obj, const std::string & debug) {
+  try {
+    uint32_t mask = ((1 << size) - 1) << offset;
+    uint32_t *ptr = reinterpret_cast<uint32_t*>(index);
+    *ptr = mask;
+    ptr += 1;
+
+    data->read(index + 4, 4);
+    *ptr &= mask;
+
+    return index + 8;
+  }
+  catch (const std::exception&) {
+    throw;
+  }
+}
+
 
 char *type_index(TypeId type, const SizeFunc &size, char *index, std::shared_ptr<IOWrapper> &data, const DynObject *obj, const std::string &debug) {
   switch (type) {
@@ -301,6 +277,7 @@ char *type_index(TypeId type, const SizeFunc &size, char *index, std::shared_ptr
     case TypeId::uint16: return type_index_num<uint16_t>(index, data, debug);
     case TypeId::uint32: return type_index_num<uint32_t>(index, data, debug);
     case TypeId::uint64: return type_index_num<uint64_t>(index, data, debug);
+    case TypeId::bits: throw std::runtime_error("indexing bitmask not implemented");
     case TypeId::float32_iee754: return type_index_num<float>(index, data, debug);
     case TypeId::stringz: return type_index_impl<std::string>(index, data, size, obj, false, debug);
     case TypeId::string: return type_index_impl<std::string>(index, data, size, obj, true, debug);
@@ -320,6 +297,7 @@ std::any type_read_any(TypeId type, char *index, std::shared_ptr<IOWrapper> &dat
     case TypeId::uint16: return type_read<uint16_t>(type, index, data, write, indexAfter);
     case TypeId::uint32: return type_read<uint32_t>(type, index, data, write, indexAfter);
     case TypeId::uint64: return type_read<uint64_t>(type, index, data, write, indexAfter);
+    case TypeId::bits: throw std::runtime_error("writing bitmask unsupported");
     case TypeId::float32_iee754: return type_read<float>(type, index, data, write, indexAfter);
     case TypeId::stringz: return type_read<std::string>(type, index, data, write, indexAfter);
     case TypeId::string: return type_read<std::string>(type, index, data, write, indexAfter);
@@ -340,6 +318,7 @@ char *type_write_any(TypeId type, char *index, std::shared_ptr<IOWrapper> &write
     case TypeId::uint16: return type_write<uint16_t>(type, index, write, flexi_cast<uint16_t>(value));
     case TypeId::uint32: return type_write<uint32_t>(type, index, write, flexi_cast<uint32_t>(value));
     case TypeId::uint64: return type_write<uint64_t>(type, index, write, flexi_cast<uint64_t>(value));
+    case TypeId::bits: throw std::runtime_error("writing bitmask unsupported");
     case TypeId::float32_iee754: return type_write<float>(type, index, write, flexi_cast<float>(value));
     case TypeId::stringz: return type_write<std::string>(type, index, write, flexi_cast<std::string>(value));
     case TypeId::string: return type_write<std::string>(type, index, write, flexi_cast<std::string>(value));
@@ -420,6 +399,7 @@ void type_copy_any(TypeId type, char *index, std::shared_ptr<IOWrapper> &output,
   case TypeId::uint16: stream_write(output, type_read<uint16_t>(type, index, data, write, indexAfter)); break;
   case TypeId::uint32: stream_write(output, type_read<uint32_t>(type, index, data, write, indexAfter)); break;
   case TypeId::uint64: stream_write(output, type_read<uint64_t>(type, index, data, write, indexAfter)); break;
+  case TypeId::bits: throw std::runtime_error("copy type not implemented");
   case TypeId::float32_iee754: stream_write(output, type_read<float>(type, index, data, write, indexAfter)); break;
   case TypeId::stringz: stream_write_strz(output, type_read<std::string>(type, index, data, write, indexAfter)); break;
   case TypeId::string: stream_write_str(output, type_read<std::string>(type, index, data, write, indexAfter)); break;
