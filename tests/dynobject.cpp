@@ -62,6 +62,35 @@ public:
   }
 };
 
+class FixtureWithParameters {
+protected:
+  std::shared_ptr<TypeRegistry> types;
+  StreamRegistry streams;
+  ObjectIndexTable indexTable;
+  std::shared_ptr<TypeSpec> parentType;
+  std::shared_ptr<TypeSpec> testType;
+  std::shared_ptr<IOWrapper> testStream;
+
+public:
+  FixtureWithParameters()
+    : types(TypeRegistry::init())
+    , parentType(types->create("parent"))
+    , testType(types->create("test"))
+  {
+    testType->appendParameter("in", TypeId::int32);
+    parentType->appendProperty("num", TypeId::int32);
+    parentType->appendProperty("test", testType->getId())
+      .withArguments(std::vector<std::string> { "num" });
+
+    testStream.reset(IOWrapper::memoryBuffer());
+
+    std::vector<uint8_t> buffer { 0x2A, 0x00, 0x00, 0x00 };
+    testStream->write(reinterpret_cast<const char*>(buffer.data()), buffer.size());
+    streams.add(testStream);
+  }
+};
+
+
 TEST_CASE_METHOD(SimpleFixture, "can create simple", "[DynObject]") {
   uint8_t staticBuffer[8 * NUM_STATIC_PROPERTIES];
 
@@ -178,5 +207,18 @@ TEST_CASE_METHOD(ComplexFixture, "can edit array", "[DynObject]") {
   result->read(output, 29);
 
   REQUIRE(memcmp(output + 11, "aaadddccc", 9) == 0);
+}
+
+TEST_CASE_METHOD(FixtureWithParameters, "can access parameters", "[DynObject]") {
+  uint8_t staticBuffer[8 * NUM_STATIC_PROPERTIES];
+
+  ObjectIndex *index = indexTable.allocateObject(parentType, 0, 0);
+
+  DynObject parent(parentType, streams, &indexTable, index, nullptr);
+  parent.writeIndex(0, testStream->size(), true);
+
+  DynObject test = parent.get<DynObject>("test");
+
+  REQUIRE(std::any_cast<int>(test.getAny("in")) == 42);
 }
 

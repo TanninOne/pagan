@@ -82,6 +82,7 @@ public:
   TypePropertyBuilder &withProcessing(const std::string &algorithm);
   TypePropertyBuilder &withValidation(ValidationFunc func);
   TypePropertyBuilder &withDebug(const std::string &debugMessage);
+  TypePropertyBuilder &withArguments(const std::vector<std::string> &args);
 
 private:
   TypeProperty *m_Wrappee;
@@ -110,12 +111,25 @@ public:
     return m_Registry;
   }
 
+  uint16_t getNumParameters() const {
+    return static_cast<uint16_t>(m_Params.size());
+  }
+
   uint16_t getNumProperties() const {
     return static_cast<uint16_t>(m_Sequence.size());
   }
 
   uint16_t indexSize() const {
     return m_IndexSize;
+  }
+
+  TypeProperty getParameter(int index) const {
+    return m_Params[index];
+  }
+
+  void appendParameter(const char* key, uint32_t type) {
+    m_ParamIdx[key] = m_Params.size();
+    m_Params.push_back({ key, type, nullSize, nullSize, validFunc, trueFunc, nop, false, false, false, false });
   }
 
   TypePropertyBuilder appendProperty(const char *key, uint32_t type) {
@@ -238,9 +252,13 @@ public:
   }
 
   std::tuple<uint32_t, size_t> get(ObjectIndex *objIndex, const char *key) const;
+  std::tuple<uint32_t, size_t, std::vector<std::string>> getWithArgs(ObjectIndex *objIndex, const char *key) const;
+
+  std::tuple<uint32_t, int, int> getPorP(ObjectIndex* objIndex, const char* key) const;
 
   std::tuple<uint32_t, size_t, SizeFunc, AssignCB> getFull(ObjectIndex *objIndex, const char *key) const;
 
+  std::vector<TypeProperty>::const_iterator paramByKey(ObjectIndex* objIndex, const char* key, int* offset) const;
   std::vector<TypeProperty>::const_iterator propertyByKey(ObjectIndex *objIndex, const char *key, int *offset = nullptr) const;
 
   uint32_t getId() const {
@@ -345,6 +363,8 @@ private:
 
   std::string m_Name;
   TypeRegistry *m_Registry;
+  std::vector<TypeProperty> m_Params;
+  std::map<std::string, int> m_ParamIdx;
   std::vector<TypeProperty> m_Sequence;
   std::map<std::string, int> m_SequenceIdx;
   std::map<std::string, ComputeFunc> m_Computed;

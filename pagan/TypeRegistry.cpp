@@ -18,27 +18,53 @@ TypeRegistry::TypeRegistry()
 }
 
 std::shared_ptr<TypeSpec> TypeRegistry::create(const char *name) {
-  auto existing = m_TypeIds.find(name);
+  std::string funcName;
+  std::vector<std::string> args;
+  std::tie(funcName, args) = splitTypeName(name);
+
+  auto existing = m_TypeIds.find(funcName);
   if (existing != m_TypeIds.end()) {
     return m_Types[existing->second];
   }
   uint32_t typeId = nextId();
-  std::shared_ptr<TypeSpec> res(new TypeSpec(name, typeId, this));
+
+  std::shared_ptr<TypeSpec> res(new TypeSpec(funcName.c_str(), typeId, this));
   if (m_Types.size() <= typeId) {
     m_Types.resize(m_Types.size() * 2);
   }
   m_Types[typeId] = res;
-  m_TypeIds[name] = typeId;
+  m_TypeIds[funcName] = typeId;
   return res;
 }
 
 std::shared_ptr<TypeSpec> TypeRegistry::create(const char *name, const std::initializer_list<TypeAttribute>& attributes) {
   std::shared_ptr<TypeSpec> res = create(name);
-  LOG_BRACKET_F("create type {0} - {1}", name, res->getId());
   for (auto attr : attributes) {
     res->appendProperty(attr.key, attr.type);
   }
   return res;
+}
+
+std::tuple<std::string, std::vector<std::string>> TypeRegistry::splitTypeName(const char* name) {
+  std::string funcName;
+  std::vector<std::string> args;
+
+  size_t len = strlen(name);
+  const char *bracketPos = strchr(name, '(');
+  if (bracketPos != nullptr) {
+    size_t namePartLen = bracketPos - name;
+    std::string argListString(bracketPos + 1, len - namePartLen - 2);
+    funcName = std::string(name, namePartLen);
+    std::istringstream sstream(argListString);
+    std::string tok;
+    while (std::getline(sstream, tok, ',')) {
+      args.push_back(tok);
+    }
+  }
+  else {
+    funcName = name;
+  }
+  return std::make_tuple(funcName, args);
 }
 
 TypeRegistry::~TypeRegistry()

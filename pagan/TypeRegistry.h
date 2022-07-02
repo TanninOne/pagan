@@ -39,6 +39,8 @@ public:
     return m_NextId++;
   }
 
+  static std::tuple<std::string, std::vector<std::string>> splitTypeName(const char* name);
+
   ~TypeRegistry();
 private:
 

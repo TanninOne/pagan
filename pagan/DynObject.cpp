@@ -205,11 +205,12 @@ bool DynObject::has(const char* key) const {
   return false;
 }
 
-std::pair<uint32_t, uint8_t*> DynObject::getEffectiveType(const char* key) const {
+std::tuple<uint32_t, uint8_t*, std::vector<std::string>> DynObject::getEffectiveType(const char* key) const {
   size_t offset;
   uint32_t typeId;
+  std::vector<std::string> args;
 
-  std::tie(typeId, offset) = m_Spec->get(m_ObjectIndex, key);
+  std::tie(typeId, offset, args) = m_Spec->getWithArgs(m_ObjectIndex, key);
 
   uint8_t* propBuffer = m_ObjectIndex->properties + offset;
 
@@ -218,14 +219,14 @@ std::pair<uint32_t, uint8_t*> DynObject::getEffectiveType(const char* key) const
     propBuffer += sizeof(uint32_t);
   }
 
-  return std::make_pair(typeId, propBuffer);
+  return std::make_tuple(typeId, propBuffer, args);
 }
 
 const TypeProperty& DynObject::getChildType(const char* key) const {
   return m_Spec->getProperty(key);
 }
 
-std::any DynObject::getAny(char *key) const {
+std::any DynObject::getAny(char* key) const {
   size_t dotOffset = strcspn(key, ".");
   if (key[dotOffset] != '\0') {
     // std::string objKey(key, key + dotOffset);
@@ -239,28 +240,38 @@ std::any DynObject::getAny(char *key) const {
   }
 
   // else: this is the "final" or "leaf" key
-  size_t offset;
+  int offsetProp;
+  int offsetParam;
   uint32_t typeId;
 
-  std::tie(typeId, offset) = m_Spec->get(m_ObjectIndex, key);
+  std::tie(typeId, offsetProp, offsetParam) = m_Spec->getPorP(m_ObjectIndex, key);
 
-  uint8_t *propBuffer = m_ObjectIndex->properties + offset;
+  if (offsetProp != -1) {
+    uint8_t* propBuffer = m_ObjectIndex->properties + offsetProp;
 
-  if (typeId == TypeId::runtime) {
-    typeId = *reinterpret_cast<uint32_t*>(propBuffer);
-    propBuffer += sizeof(uint32_t);
+    if (typeId == TypeId::runtime) {
+      typeId = *reinterpret_cast<uint32_t*>(propBuffer);
+      propBuffer += sizeof(uint32_t);
+    }
+
+    if (typeId >= TypeId::custom) {
+      throw IncompatibleType("expected POD");
+    }
+
+    char* index = reinterpret_cast<char*>(propBuffer);
+
+    std::shared_ptr<IOWrapper> dataStream = m_Streams.get(m_ObjectIndex->dataStream);
+    std::shared_ptr<IOWrapper> writeStream = m_Streams.getWrite();
+
+    return type_read_any(static_cast<TypeId>(typeId), index, dataStream, writeStream);
   }
-
-  if (typeId >= TypeId::custom) {
-    throw IncompatibleType("expected POD");
+  else if (offsetParam != -1) {
+    LOG_F("get parameter {0} - {1}", offsetParam, m_Parameters.size());
+    return m_Parameters.at(offsetParam);
   }
-
-  char *index = reinterpret_cast<char*>(propBuffer);
-
-  std::shared_ptr<IOWrapper> dataStream = m_Streams.get(m_ObjectIndex->dataStream);
-  std::shared_ptr<IOWrapper> writeStream = m_Streams.getWrite();
-
-  return type_read_any(static_cast<TypeId>(typeId), index, dataStream, writeStream);
+  else {
+    throw std::runtime_error("invalid paramater");
+  }
 }
 
 std::any DynObject::getAny(const std::vector<std::string>::const_iterator &cur, const std::vector<std::string>::const_iterator &end) const {
@@ -274,28 +285,39 @@ std::any DynObject::getAny(const std::vector<std::string>::const_iterator &cur, 
   }
 
   // else: this is the "final" or "leaf" key
-  size_t offset;
+  int offsetParam;
+  int offsetProp;
   uint32_t typeId;
 
-  std::tie(typeId, offset) = m_Spec->get(m_ObjectIndex, cur->c_str());
+  std::tie(typeId, offsetProp, offsetParam) = m_Spec->getPorP(m_ObjectIndex, cur->c_str());
 
-  uint8_t *propBuffer = m_ObjectIndex->properties + offset;
+  LOG_F("getAny {} - {} - {}", *cur, offsetParam, offsetProp);
 
-  if (typeId == TypeId::runtime) {
-    typeId = *reinterpret_cast<uint32_t*>(propBuffer);
-    propBuffer += sizeof(uint32_t);
+  if (offsetProp != -1) {
+    uint8_t* propBuffer = m_ObjectIndex->properties + offsetProp;
+
+    if (typeId == TypeId::runtime) {
+      typeId = *reinterpret_cast<uint32_t*>(propBuffer);
+      propBuffer += sizeof(uint32_t);
+    }
+
+    if (typeId >= TypeId::custom) {
+      throw IncompatibleType("expected POD");
+    }
+
+    char* index = reinterpret_cast<char*>(propBuffer);
+
+    std::shared_ptr<IOWrapper> dataStream = m_Streams.get(m_ObjectIndex->dataStream);
+    std::shared_ptr<IOWrapper> writeStream = m_Streams.getWrite();
+
+    return type_read_any(static_cast<TypeId>(typeId), index, dataStream, writeStream);
   }
-
-  if (typeId >= TypeId::custom) {
-    throw IncompatibleType("expected POD");
+  else if (offsetParam != -1) {
+    return m_Parameters.at(offsetParam);
   }
-
-  char *index = reinterpret_cast<char*>(propBuffer);
-
-  std::shared_ptr<IOWrapper> dataStream = m_Streams.get(m_ObjectIndex->dataStream);
-  std::shared_ptr<IOWrapper> writeStream = m_Streams.getWrite();
-
-  return type_read_any(static_cast<TypeId>(typeId), index, dataStream, writeStream);
+  else {
+    throw std::runtime_error("invalid paramater");
+  }
 }
 
 void DynObject::setAny(const std::vector<std::string>::const_iterator &cur, const std::vector<std::string>::const_iterator &end, const std::any &value) {
@@ -372,7 +394,8 @@ DynObject DynObject::getObject(const char* key) const {
 
   uint8_t* propBuffer;
   uint32_t typeId;
-  std::tie(typeId, propBuffer) = getEffectiveType(key);
+  std::vector<std::string> argList;
+  std::tie(typeId, propBuffer, argList) = getEffectiveType(key);
 
   if (typeId < TypeId::custom) {
     LOG_F("different type stored {0}", typeId);
@@ -391,7 +414,11 @@ DynObject DynObject::getObject(const char* key) const {
 
   // LOG_F("child object {} type {} - offset {}", key, type->getName(), objOffset);
 
-  return getObjectAtOffset(type, objOffset, propBuffer);
+  DynObject res = getObjectAtOffset(type, objOffset, propBuffer);
+  std::vector<std::any> args;
+  std::transform(argList.begin(), argList.end(), std::back_inserter(args), [this](const std::string& key) { return getAny(key.c_str()); });
+  res.setParameters(args);
+  return res;
 }
 
 std::vector<DynObject> DynObject::getListOfObjects(const char* key) const {

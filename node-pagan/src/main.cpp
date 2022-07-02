@@ -181,7 +181,8 @@ public:
         else {
           uint8_t* propBuffer;
           uint32_t typeId;
-          std::tie(typeId, propBuffer) = parent->getEffectiveType(key);
+          std::vector<std::string> argList;
+          std::tie(typeId, propBuffer, argList) = parent->getEffectiveType(key);
 
           return readValue(info.Env(), static_cast<TypeId>(typeId), reinterpret_cast<char*>(propBuffer), parent->getDataStream(), parent->getWriteStream());
         }
@@ -290,7 +291,8 @@ private:
 
     uint8_t* propBuffer;
     uint32_t typeId;
-    std::tie(typeId, propBuffer) = m_Value->getEffectiveType(key.c_str());
+    std::vector<std::string> argList;
+    std::tie(typeId, propBuffer, argList) = m_Value->getEffectiveType(key.c_str());
 
     setValue(m_Value.get(), typeId, key, info[1]);
 

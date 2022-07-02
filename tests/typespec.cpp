@@ -37,6 +37,17 @@ TEST_CASE_METHOD(SimpleFixture, "can add properties", "[typespec]") {
   REQUIRE(spec->getStaticSize() == 24);
 }
 
+TEST_CASE_METHOD(SimpleFixture, "can add parameter", "[typespec]") {
+  auto spec = registry->create("params_test_1");
+
+  REQUIRE_NOTHROW([&]() {
+    spec->appendParameter("int32", TypeId::int32);
+    spec->appendParameter("string", TypeId::string);
+  }());
+
+  REQUIRE(spec->getNumParameters() == 2);
+}
+
 TEST_CASE_METHOD(SimpleFixture, "can add computed property", "[typespec]") {
   auto spec = registry->create("test3");
 
@@ -55,6 +66,19 @@ TEST_CASE_METHOD(SimpleFixture, "can add computed property", "[typespec]") {
   REQUIRE(spec->getStaticSize() == 4);
 }
 
+TEST_CASE_METHOD(SimpleFixture, "can add prop with arguments", "[typespec]") {
+  auto specInner = registry->create("parames_test_2_inner");
+
+  specInner->appendParameter("len", TypeId::int32);
+  specInner->appendProperty("str", TypeId::string)
+    .withSize([](const IScriptQuery& obj) -> ObjSize { return flexi_cast<ObjSize>(obj.getAny("len")); });
+
+  auto spec = registry->create("parames_test_2");
+  spec->appendProperty("prop1", TypeId::int32);
+  spec->appendProperty("prop2", specInner->getId())
+    .withArguments({ "prop1" });
+}
+
 TEST_CASE_METHOD(SimpleFixture, "spec has sensible defaults", "[typespec]") {
   auto spec = registry->create("test4");
   spec->appendProperty("prop1", TypeId::int32);
@@ -68,4 +92,3 @@ TEST_CASE_METHOD(SimpleFixture, "spec has sensible defaults", "[typespec]") {
   REQUIRE(prop.isValidated == false);
   REQUIRE(prop.key == "prop1");
 }
-

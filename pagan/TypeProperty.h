@@ -25,4 +25,5 @@ struct TypeProperty {
   IndexFunc index;
   SwitchFunc switchFunc;
   std::map<std::variant<std::string, int32_t>, uint32_t> switchCases;
+  std::vector<std::string> argList;
 };

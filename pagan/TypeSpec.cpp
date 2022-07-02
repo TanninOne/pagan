@@ -119,6 +119,23 @@ void TypeSpec::writeIndex(ObjectIndexTable *indexTable, ObjectIndex *objIndex, s
   indexTable->setProperties(objIndex, buffer, propertiesEnd - buffer);
 }
 
+std::vector<TypeProperty>::const_iterator TypeSpec::paramByKey(ObjectIndex* objIndex, const char* key, int* offset) const {
+  if (offset != nullptr) {
+    *offset = 0;
+  }
+
+  try {
+    int off = m_ParamIdx.at(key);
+    if (offset != nullptr) {
+      *offset = off;
+    }
+    return m_Params.begin() + off;
+  }
+  catch (const std::exception &err) {
+    return m_Params.cend();
+  }
+}
+
 std::vector<TypeProperty>::const_iterator TypeSpec::propertyByKey(ObjectIndex *objIndex, const char *key, int *offset) const {
   if (offset != nullptr) {
     *offset = 0;
@@ -143,6 +160,38 @@ std::vector<TypeProperty>::const_iterator TypeSpec::propertyByKey(ObjectIndex *o
   });
 }
 
+std::tuple<uint32_t, int, int> TypeSpec::getPorP(ObjectIndex* objIndex, const char* key) const {
+  int propertyOffset = 0;
+
+  size_t bitsetBytes = (m_Sequence.size() + 7) / 8;
+  size_t offset = sizeof(DataStreamId) + sizeof(DataOffset);
+
+  int idx = 0;
+
+  { // param?
+    auto iter = paramByKey(objIndex, key, &propertyOffset);
+    LOG_F("param by key {} - {}", key, iter != m_Params.cend());
+
+    if (iter != m_Params.cend()) {
+      return std::tuple<uint32_t, size_t, size_t>(iter->typeId, -1, propertyOffset);
+    }
+  }
+
+  { // property?
+    auto iter = propertyByKey(objIndex, key, &propertyOffset);
+
+    if (iter != m_Sequence.cend()) {
+      if (!isBitSet(objIndex, idx)) {
+        throw std::runtime_error(fmt::format("Property not set: {0}", key));
+      }
+
+      return std::tuple<uint32_t, size_t, size_t>(iter->typeId, propertyOffset, -1);
+    }
+  }
+
+  throw std::runtime_error(fmt::format("Property not found: {0}", key));
+}
+
 std::tuple<uint32_t, size_t> TypeSpec::get(ObjectIndex * objIndex, const char *key) const {
   int propertyOffset = 0;
 
@@ -151,17 +200,40 @@ std::tuple<uint32_t, size_t> TypeSpec::get(ObjectIndex * objIndex, const char *k
 
   int idx = 0;
 
-  auto iter = propertyByKey(objIndex, key, &propertyOffset);
+  { // property?
+    auto iter = propertyByKey(objIndex, key, &propertyOffset);
 
-  if (iter == m_Sequence.cend()) {
-    throw std::runtime_error(fmt::format("Property not found: {0}", key));
+    if (iter != m_Sequence.cend()) {
+      if (!isBitSet(objIndex, idx)) {
+        throw std::runtime_error(fmt::format("Property not set: {0}", key));
+      }
+      return std::tuple<uint32_t, size_t>(iter->typeId, propertyOffset);
+    }
   }
 
-  if (!isBitSet(objIndex, idx)) {
-    throw std::runtime_error(fmt::format("Property not set: {0}", key));
+  throw std::runtime_error(fmt::format("Property not found: {0}", key));
+}
+
+std::tuple<uint32_t, size_t, std::vector<std::string>> TypeSpec::getWithArgs(ObjectIndex * objIndex, const char *key) const {
+  int propertyOffset = 0;
+
+  size_t bitsetBytes = (m_Sequence.size() + 7) / 8;
+  size_t offset = sizeof(DataStreamId) + sizeof(DataOffset);
+
+  int idx = 0;
+
+  { // property?
+    auto iter = propertyByKey(objIndex, key, &propertyOffset);
+
+    if (iter != m_Sequence.cend()) {
+      if (!isBitSet(objIndex, idx)) {
+        throw std::runtime_error(fmt::format("Property not set: {0}", key));
+      }
+      return std::tuple<uint32_t, size_t, std::vector<std::string>>(iter->typeId, propertyOffset, iter->argList);
+    }
   }
 
-  return std::tuple<uint32_t, size_t>(iter->typeId, propertyOffset);
+  throw std::runtime_error(fmt::format("Property not found: {0}", key));
 }
 
 std::tuple<uint32_t, size_t, SizeFunc, AssignCB> TypeSpec::getFull(ObjectIndex * objIndex, const char * key) const {
@@ -187,7 +259,7 @@ uint8_t *TypeSpec::indexCustom(const TypeProperty &prop, uint32_t typeId,
                                DataStreamId dataStream, std::shared_ptr<IOWrapper> data, std::streampos streamLimit) {
   std::shared_ptr<TypeSpec> spec = m_Registry->getById(typeId);
   int staticSize = spec->getStaticSize();
-  LOG_BRACKET_F("index custom spec {}", spec->getName());
+  LOG_BRACKET_F("index custom spec {} - {}", spec->getName(), typeId);
   std::streampos dataPos = data->tellg();
 
   int64_t x = static_cast<int64_t>(streamLimit);
@@ -198,7 +270,7 @@ uint8_t *TypeSpec::indexCustom(const TypeProperty &prop, uint32_t typeId,
     throw std::runtime_error("end of stream");
   }
 
-  LOG_F("custom type static size {}", staticSize);
+  LOG_F("custom type {0} - static size {1}", spec->getName(), staticSize);
 
   char *res = nullptr;
   if (staticSize >= 0) {
@@ -226,6 +298,7 @@ uint8_t *TypeSpec::indexCustom(const TypeProperty &prop, uint32_t typeId,
       int64_t lim = newLimit;
       if (lim < 0) {
         ObjSize again = prop.size(*obj);
+        LOG_F("new limit unknown, determine size (of {}) {}", m_Registry->getById(prop.typeId)->getName(), again);
       }
       LOG_F("new stream limit {} (has size: {})", lim, prop.hasSizeFunc);
       lim += 1;
@@ -272,7 +345,7 @@ auto TypeSpec::makeIndexFunc(const TypeProperty &prop,
         }
       }
       uint32_t typeId = iter->second;
-      LOG_F("index runtime type: {}", m_Registry->getById(typeId)->getName());
+      LOG_F("index runtime type: {} - {}", m_Registry->getById(typeId)->getName(), typeId);
 
       memcpy(index, reinterpret_cast<uint8_t*>(&typeId), sizeof(uint32_t));
       index += sizeof(uint32_t);
@@ -345,6 +418,11 @@ TypePropertyBuilder& TypePropertyBuilder::withValidation(ValidationFunc func) {
 
 TypePropertyBuilder& TypePropertyBuilder::withDebug(const std::string &debugMessage) {
   m_Wrappee->debug = debugMessage;
+  return *this;
+}
+
+TypePropertyBuilder& TypePropertyBuilder::withArguments(const std::vector<std::string>& args) {
+  m_Wrappee->argList = args;
   return *this;
 }
 

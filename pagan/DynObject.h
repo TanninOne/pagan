@@ -69,6 +69,10 @@ public:
 
   DynObject &operator=(DynObject &&) = default;
 
+  void setParameters(const std::vector<std::any>& params) {
+    m_Parameters = params;
+  }
+
   void saveTo(std::shared_ptr<IOWrapper> file);
 
   uint8_t *savePropTo(std::shared_ptr<IOWrapper> file, uint32_t typeId, uint8_t* propBuffer);
@@ -99,13 +103,14 @@ public:
 
   bool has(const char* key) const;
 
-  std::pair<uint32_t, uint8_t*> getEffectiveType(const char* key) const;
+  std::tuple<uint32_t, uint8_t*, std::vector<std::string>> getEffectiveType(const char* key) const;
 
   bool isCustom(const char *key) const {
     uint8_t *propBuffer;
     uint32_t typeId;
+    std::vector<std::string> args;
 
-    std::tie(typeId, propBuffer) = getEffectiveType(key);
+    std::tie(typeId, propBuffer, args) = getEffectiveType(key);
 
     return typeId >= TypeId::custom;
   }
@@ -186,6 +191,7 @@ private:
   ObjectIndexTable *m_IndexTable;
   ObjectIndex *m_ObjectIndex;
   const DynObject *m_Parent;
+  std::vector<std::any> m_Parameters;
 
 };
 
@@ -202,7 +208,8 @@ inline T DynObject::get(const char* key) const {
 
   uint32_t typeId;
   uint8_t* propBuffer;
-  std::tie(typeId, propBuffer) = getEffectiveType(key);
+  std::vector<std::string> args;
+  std::tie(typeId, propBuffer, args) = getEffectiveType(key);
 
   if (typeId >= TypeId::custom) {
     throw IncompatibleType("expected POD");

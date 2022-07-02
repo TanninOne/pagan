@@ -57,12 +57,55 @@ void addInstances(Parser& parser, std::shared_ptr<TypeSpec> &type, const YAML::N
   }
 }
 
-void addProperties(Parser &parser, NamedTypes &types, std::shared_ptr<TypeSpec> &type, const YAML::Node &spec) {
+uint32_t determineType(Parser &parser, NamedTypes &types, YAML::Node typeNode, uint32_t &fixedSize, std::vector<std::string> &argList) {
+  uint32_t typeId;
+  if (!typeNode.IsDefined()) {
+    typeId = TypeId::bytes;
+  }
+  else if (typeNode.IsMap()) {
+    if (typeNode["switch-on"].IsDefined()) {
+      typeId = TypeId::runtime;
+    }
+    else {
+      typeId = TypeId::custom;
+    }
+  }
+  else {
+    std::string typeIdStr = typeNode.as<std::string>();
+    std::tie(typeIdStr, argList) = TypeRegistry::splitTypeName(typeIdStr.c_str());
+    LOG_F("typeid {}", typeIdStr);
+    if ((typeIdStr[0] == 'b') && (typeIdStr.length() <= 3)) {
+      LOG_F("might be bits?");
+
+      // might be bits but can't be sure yet
+      const char* buf = typeIdStr.c_str();
+      int bitCount = 0;
+      auto [ptr, ec] { std::from_chars(buf + 1, buf + typeIdStr.length(), bitCount) };
+      LOG_F("might be bits? {} - {}", ptr, (int)ec);
+      if ((ec == std::errc()) && (*ptr == '\0')) {
+        LOG_F("yes bits {}", bitCount);
+        typeId = bits;
+        fixedSize = bitCount;
+      }
+      else {
+        // custom type after all
+        typeId = getNamedType(types, parser, typeIdStr);
+      }
+    }
+    else {
+      typeId = getNamedType(types, parser, typeIdStr);
+    }
+  }
+
+  return typeId;
+}
+
+void addParams(Parser &parser, NamedTypes &types, std::shared_ptr<TypeSpec> &type, const YAML::Node &spec) {
   if (!spec.IsDefined() || !spec.IsSequence()) {
     return;
   }
 
-  LOG_BRACKET_F("create type {0} - {1}", type->getName(), type->getId());
+  LOG_BRACKET_F("read params of type {0} - {1}", type->getName(), type->getId());
 
   for (size_t i = 0; i < spec.size(); ++i) {
     YAML::Node entry = spec[i];
@@ -71,45 +114,34 @@ void addProperties(Parser &parser, NamedTypes &types, std::shared_ptr<TypeSpec> 
       ? idNode.as<std::string>()
       : std::to_string(i);
 
-    uint32_t typeId;
     uint32_t fixedSize = 0;
-    YAML::Node typeNode = entry["type"];
-    if (!typeNode.IsDefined()) {
-      typeId = TypeId::bytes;
-    }
-    else if (typeNode.IsMap()) {
-      if (typeNode["switch-on"].IsDefined()) {
-        typeId = TypeId::runtime;
-      }
-      else {
-        typeId = TypeId::custom;
-      }
-    }
-    else {
-      std::string typeIdStr = typeNode.as<std::string>();
-      LOG_F("typeid {}", typeIdStr);
-      if ((typeIdStr[0] == 'b') && (typeIdStr.length() <= 3)) {
-        LOG_F("might be bits?");
 
-        // might be bits but can't be sure yet
-        const char* buf = typeIdStr.c_str();
-        int bitCount = 0;
-        auto [ptr, ec] { std::from_chars(buf + 1, buf + typeIdStr.length(), bitCount) };
-        LOG_F("might be bits? {} - {}", ptr, (int)ec);
-        if ((ec == std::errc()) && (*ptr == '\0')) {
-          LOG_F("yes bits {}", bitCount);
-          typeId = bits;
-          fixedSize = bitCount;
-        }
-        else {
-          // custom type after all
-          typeId = getNamedType(types, parser, typeIdStr);
-        }
-      }
-      else {
-        typeId = getNamedType(types, parser, typeIdStr);
-      }
-    }
+    std::vector<std::string> argList;
+
+    uint32_t typeId = determineType(parser, types, entry["type"], fixedSize, argList);
+
+    type->appendParameter(name.c_str(), typeId);
+  }
+}
+
+void addProperties(Parser &parser, NamedTypes &types, std::shared_ptr<TypeSpec> &type, const YAML::Node &spec) {
+  if (!spec.IsDefined() || !spec.IsSequence()) {
+    return;
+  }
+
+  LOG_BRACKET_F("read properties of type {0} - {1}", type->getName(), type->getId());
+
+  for (size_t i = 0; i < spec.size(); ++i) {
+    YAML::Node entry = spec[i];
+    YAML::Node idNode = entry["id"];
+    std::string name = idNode.IsDefined()
+      ? idNode.as<std::string>()
+      : std::to_string(i);
+
+    uint32_t fixedSize = 0;
+    std::vector<std::string> argList;
+    uint32_t typeId = determineType(parser, types, entry["type"], fixedSize, argList);
+    YAML::Node typeNode = entry["type"];
 
     TypePropertyBuilder prop = type->appendProperty(name.c_str(), typeId);
     if (entry["size"].IsDefined()) {
@@ -117,6 +149,10 @@ void addProperties(Parser &parser, NamedTypes &types, std::shared_ptr<TypeSpec> 
     }
     else if (fixedSize > 0) {
       prop.withSize(makeFunc<ObjSize>(std::to_string(fixedSize)));
+    }
+
+    if (argList.size() > 0) {
+      prop.withArguments(argList);
     }
 
     if (entry["debug"].IsDefined()) {
@@ -263,9 +299,11 @@ void createTypeFromYAML(Parser &parser,
                         const char *name,
                         const YAML::Node &spec) {
   addSubTypes(parser, types, spec["types"]);
-
   std::shared_ptr<TypeSpec> type = parser.createType(name);
   types[name] = type->getId();
+  LOG_F("create type {0} ({1})", name, type->getId());
+  addParams(parser, types, type, spec["params"]);
+  LOG_F("add properties {0}", type->getId());
   addProperties(parser, types, type, spec["seq"]);
   addInstances(parser, type, spec["instances"]);
 }

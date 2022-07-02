@@ -27,7 +27,7 @@ LogBracket::LogBracket(const std::string & message)
   : m_Message(message) {
   if (s_Indent <= MAX_DEPTH) {
     s_RingLog.log(indent() + "+++" + message);
-    // std::cout << indent() << "+++" << message << std::endl;
+    std::cout << indent() << "+++" << message << std::endl;
   }
   ++s_Indent;
 }
@@ -36,7 +36,7 @@ LogBracket::~LogBracket() {
   --s_Indent;
   if (s_Indent <= MAX_DEPTH) {
     s_RingLog.log(indent() + "---" + m_Message);
-    // std::cout << indent() << "---" << m_Message << std::endl;
+    std::cout << indent() << "---" << m_Message << std::endl;
   }
 }
 
