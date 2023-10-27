@@ -14,6 +14,16 @@ class TypeSpec;
 class ObjectIndex;
 class ObjectIndexTable;
 
+typedef std::map<int32_t, std::string> KSYEnum;
+
+class WrongTypeRequestedError : public std::runtime_error {
+public:
+  WrongTypeRequestedError()
+    : std::runtime_error("wrong type requested")
+  {
+  }
+};
+
 class DynObject : public IScriptQuery
 {
 
@@ -184,6 +194,8 @@ private:
   std::vector<DynObject> getListOfObjects(const char* key) const;
   std::vector<std::any> getListOfAny(const char* key) const;
 
+  std::tuple<uint8_t*, ObjSize, uint32_t> accessArrayIndex(const char *key) const;
+
 private:
 
   std::shared_ptr<TypeSpec> m_Spec;
@@ -233,13 +245,13 @@ inline std::vector<std::any> DynObject::getList(const char* key) const {
 
 template<typename T>
 inline std::vector<T> DynObject::getList(const char *key) const {
-  LOG_BRACKET_F("get list of pod {0}", key);
+  LOG_BRACKET_F("get list of pod \"{0}\"", key);
 
   size_t offset;
   uint32_t typeId;
 
   std::tie(typeId, offset) = m_Spec->get(m_ObjectIndex, key);
-  LOG_F("(2) key {0} offset {1}", key, offset);
+  LOG_F("(2) key: \"{0}\" offset: {1}", key, offset);
   if (typeId >= TypeId::custom) {
     throw IncompatibleType("Expected POD");
   }
@@ -247,20 +259,48 @@ inline std::vector<T> DynObject::getList(const char *key) const {
   std::shared_ptr<IOWrapper> dataStream = m_Streams.get(m_ObjectIndex->dataStream);
   std::shared_ptr<IOWrapper> writeStream = m_Streams.getWrite();
 
+  union {
+    struct {
   ObjSize count;
-  ObjSize arrayOffset;
-  char *propPtr = reinterpret_cast<char*>(m_ObjectIndex->properties + offset);
-  memcpy(reinterpret_cast<char*>(&count), propPtr, sizeof(ObjSize));
-  memcpy(reinterpret_cast<char*>(&arrayOffset), propPtr + sizeof(ObjSize), sizeof(ObjSize));
+      ObjSize offset;
+    } arrayProp;
+    uint64_t buff;
+  };
 
-  LOG_F("(2) array index offset {0} + {1} -> count {2}, array offset {3}", m_ObjectIndex->properties, offset, count, arrayOffset);
+  buff = *reinterpret_cast<uint64_t*>(m_ObjectIndex->properties + offset);
 
-  char *arrayPtr = reinterpret_cast<char*>(m_IndexTable->arrayAddress(arrayOffset));
+  LOG_F("(2) array index offset {0} + {1} -> count {2}, array offset {3}", reinterpret_cast<uint64_t>(m_ObjectIndex->properties), offset, arrayProp.count, arrayProp.offset);
+
+  uint8_t *arrayData = m_IndexTable->arrayAddress(arrayProp.offset);
 
   std::vector<T> res;
 
-  for (int i = 0; i < count; ++i) {
-    res.push_back(type_read<T>(static_cast<TypeId>(typeId), arrayPtr, dataStream, writeStream, &arrayPtr));
+  if (arrayProp.count == COUNT_EOS) {
+    // eos array hasn't been loaded yet
+    const TypeProperty& prop = getProperty(key);
+    std::shared_ptr<IOWrapper> data = getDataStream();
+    uint64_t arrayDataPos;
+    uint64_t streamLimit;
+    memcpy(reinterpret_cast<char*>(&arrayDataPos), arrayData, sizeof(uint64_t));
+    memcpy(reinterpret_cast<char*>(&streamLimit), arrayData + sizeof(uint64_t), sizeof(uint64_t));
+    data->seekg(arrayDataPos);
+    m_Spec->indexEOSArray(prop, m_IndexTable, m_ObjectIndex->properties + offset,
+                          this, m_ObjectIndex->dataStream, data, streamLimit);
+
+    // update array info
+    buff = *reinterpret_cast<uint64_t*>(m_ObjectIndex->properties + offset);
+    arrayData = m_IndexTable->arrayAddress(arrayProp.offset);
+  }
+
+  char* arrayPtr = reinterpret_cast<char*>(arrayData);
+  for (int i = 0; i < arrayProp.count; ++i) {
+    uint32_t itemType = typeId;
+    if (itemType == TypeId::runtime) {
+      itemType = *reinterpret_cast<uint32_t*>(arrayPtr);
+      arrayPtr += sizeof(uint32_t);
+    }
+
+    res.push_back(type_read<T>(static_cast<TypeId>(itemType), arrayPtr, dataStream, writeStream, &arrayPtr));
   }
 
   return res;

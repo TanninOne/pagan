@@ -209,12 +209,15 @@ std::tuple<uint32_t, uint8_t*, std::vector<std::string>> DynObject::getEffective
   size_t offset;
   uint32_t typeId;
   std::vector<std::string> args;
+  bool isList;
 
-  std::tie(typeId, offset, args) = m_Spec->getWithArgs(m_ObjectIndex, key);
+  std::tie(typeId, offset, args, isList) = m_Spec->getWithArgs(m_ObjectIndex, key);
 
   uint8_t* propBuffer = m_ObjectIndex->properties + offset;
 
-  if (typeId == TypeId::runtime) {
+
+  // for lists, the concrete type is stored with the individual items so the list type is still actually "runtime"
+  if ((typeId == TypeId::runtime) && !isList) {
     typeId = *reinterpret_cast<uint32_t*>(propBuffer);
     propBuffer += sizeof(uint32_t);
   }
@@ -422,13 +425,36 @@ DynObject DynObject::getObject(const char* key) const {
 }
 
 std::vector<DynObject> DynObject::getListOfObjects(const char* key) const {
+  auto [arrayCur, count, typeId] = accessArrayIndex(key);
+
+  std::vector<DynObject> res;
+  for (int i = 0; i < count; ++i) {
+    uint32_t itemType = typeId;
+    if (itemType == TypeId::runtime) {
+      itemType = *reinterpret_cast<uint32_t*>(arrayCur);
+      arrayCur += sizeof(uint32_t);
+      if (itemType < TypeId::custom) {
+        throw WrongTypeRequestedError();
+      }
+    }
+    int64_t objOffset = *reinterpret_cast<int64_t*>(arrayCur);
+
+    std::shared_ptr<TypeSpec> type(m_Spec->getRegistry()->getById(itemType));
+    res.push_back(getObjectAtOffset(type, objOffset, arrayCur));
+    arrayCur += sizeof(int64_t);
+  }
+
+  return res;
+}
+
+std::tuple<uint8_t*, ObjSize, uint32_t> DynObject::accessArrayIndex(const char* key) const {
   LOG_BRACKET_F("get list of obj {0}", key);
 
   size_t offset;
   uint32_t typeId;
 
   std::tie(typeId, offset) = getSpec(key);
-  LOG_F("(3) key {0} offset {1}", key, offset);
+  LOG_F("(3) key {0}  offset {1} -> {2}", key, offset, (uint64_t)(m_ObjectIndex->properties + offset), typeId);
 
   // if it's a runtime type the concrete type is stored with each item individually
   // so we can't currently determine if the type at runtime is actually valid
@@ -468,52 +494,28 @@ std::vector<DynObject> DynObject::getListOfObjects(const char* key) const {
 
   uint8_t* arrayCur = arrayData;
 
-  std::vector<DynObject> res;
-  for (int i = 0; i < arrayProp.count; ++i) {
-    uint32_t itemType = typeId;
-    if (itemType == TypeId::runtime) {
-      itemType = *reinterpret_cast<uint32_t*>(arrayCur);
-      arrayCur += sizeof(uint32_t);
-    }
-    int64_t objOffset = *reinterpret_cast<int64_t*>(arrayCur);
+  LOG_F("array count 2 {} - {}", arrayProp.count, typeId);
 
-    std::shared_ptr<TypeSpec> type(m_Spec->getRegistry()->getById(itemType));
-    res.push_back(getObjectAtOffset(type, objOffset, arrayCur));
-    arrayCur += sizeof(int64_t);
-  }
-
-  return res;
+  return std::make_tuple(arrayCur, arrayProp.count, typeId);
 }
 
 std::vector<std::any> DynObject::getListOfAny(const char* key) const {
-  LOG_BRACKET_F("get list of pod {0}", key);
-
-  size_t offset;
-  uint32_t typeId;
-
-  std::tie(typeId, offset) = m_Spec->get(m_ObjectIndex, key);
-  LOG_F("(2) key {0} offset {1}", key, offset);
-  if (typeId >= TypeId::custom) {
-    throw IncompatibleType("Expected POD");
-  }
-
+  auto [arrayCur, count, typeId] = accessArrayIndex(key);
   std::shared_ptr<IOWrapper> dataStream = m_Streams.get(m_ObjectIndex->dataStream);
   std::shared_ptr<IOWrapper> writeStream = m_Streams.getWrite();
-
-  ObjSize count;
-  ObjSize arrayOffset;
-  char* propPtr = reinterpret_cast<char*>(m_ObjectIndex->properties + offset);
-  memcpy(reinterpret_cast<char*>(&count), propPtr, sizeof(ObjSize));
-  memcpy(reinterpret_cast<char*>(&arrayOffset), propPtr + sizeof(ObjSize), sizeof(ObjSize));
-
-  LOG_F("(2) array index offset {0} + {1} -> count {2}, array offset {3}", m_ObjectIndex->properties, offset, count, arrayOffset);
-
-  char* arrayPtr = reinterpret_cast<char*>(m_IndexTable->arrayAddress(arrayOffset));
 
   std::vector<std::any> res;
 
   for (int i = 0; i < count; ++i) {
-    res.push_back(type_read_any(static_cast<TypeId>(typeId), arrayPtr, dataStream, writeStream));
+    uint32_t actualTypeId = typeId;
+    if (actualTypeId == TypeId::runtime) {
+      actualTypeId = *reinterpret_cast<uint32_t*>(arrayCur);
+      arrayCur += sizeof(uint32_t);
+      if (actualTypeId < TypeId::custom) {
+        throw WrongTypeRequestedError();
+      }
+    }
+    res.push_back(type_read_any(static_cast<TypeId>(actualTypeId), reinterpret_cast<char*>(arrayCur), dataStream, writeStream));
   }
 
   return res;

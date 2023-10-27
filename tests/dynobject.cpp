@@ -1,4 +1,5 @@
 #include <catch.hpp>
+#include <numeric>
 #include "../pagan/DynObject.h"
 #include "../pagan/TypeRegistry.h"
 #include "../pagan/TypeSpec.h"
@@ -90,10 +91,69 @@ public:
   }
 };
 
+class FixtureWithRTPODArray {
+protected:
+  std::shared_ptr<TypeRegistry> types;
+  StreamRegistry streams;
+  ObjectIndexTable indexTable;
+  std::shared_ptr<TypeSpec> listType;
+  std::shared_ptr<IOWrapper> testStream;
+
+public:
+  FixtureWithRTPODArray()
+    : types(TypeRegistry::init())
+    , listType(types->create("list"))
+  {
+    // typedef std::function<std::variant<std::string, int32_t>(const IScriptQuery &object)> SwitchFunc;
+    // TypePropertyBuilder &TypePropertyBuilder::withTypeSwitch(SwitchFunc func, const std::map<std::variant<std::string, int32_t>, uint32_t> &cases) {
+    listType->appendProperty("list", TypeId::runtime)
+      .withTypeSwitch([](const IScriptQuery& object) { return "_"; }, { { "_", TypeId::uint8 } })
+      .withRepeatToEOS()
+      ;
+
+    testStream.reset(IOWrapper::memoryBuffer());
+
+    std::vector<uint8_t> buffer { 0x01, 0x02, 0x03, 0x05, 0x08, 0x0D };
+    testStream->write(reinterpret_cast<const char*>(buffer.data()), buffer.size());
+    streams.add(testStream);
+  }
+};
+
+
+class FixtureWithRTArray {
+protected:
+  std::shared_ptr<TypeRegistry> types;
+  StreamRegistry streams;
+  ObjectIndexTable indexTable;
+  std::shared_ptr<TypeSpec> listType;
+  std::shared_ptr<TypeSpec> itemType;
+  std::shared_ptr<IOWrapper> testStream;
+
+public:
+  FixtureWithRTArray()
+    : types(TypeRegistry::init())
+    , listType(types->create("list"))
+    , itemType(types->create("item"))
+  {
+    itemType->appendProperty("val", TypeId::int8);
+
+    // typedef std::function<std::variant<std::string, int32_t>(const IScriptQuery &object)> SwitchFunc;
+    // TypePropertyBuilder &TypePropertyBuilder::withTypeSwitch(SwitchFunc func, const std::map<std::variant<std::string, int32_t>, uint32_t> &cases) {
+    listType->appendProperty("list", TypeId::runtime)
+      .withTypeSwitch([](const IScriptQuery& object) { return "_"; }, { { "_", itemType->getId() } })
+      .withRepeatToEOS()
+      ;
+
+    testStream.reset(IOWrapper::memoryBuffer());
+
+    std::vector<uint8_t> buffer { 0x01, 0x02, 0x03, 0x05, 0x08, 0x0D };
+    testStream->write(reinterpret_cast<const char*>(buffer.data()), buffer.size());
+    streams.add(testStream);
+  }
+};
+
 
 TEST_CASE_METHOD(SimpleFixture, "can create simple", "[DynObject]") {
-  uint8_t staticBuffer[8 * NUM_STATIC_PROPERTIES];
-
   ObjectIndex *index = indexTable.allocateObject(testType, 0, 0);
 
   DynObject obj(testType, streams, &indexTable, index, nullptr);
@@ -103,8 +163,6 @@ TEST_CASE_METHOD(SimpleFixture, "can create simple", "[DynObject]") {
 }
 
 TEST_CASE_METHOD(SimpleFixture, "can save simple", "[DynObject]") {
-  uint8_t staticBuffer[8 * NUM_STATIC_PROPERTIES];
-
   ObjectIndex *index = indexTable.allocateObject(testType, 0, 0);
 
   DynObject obj(testType, streams, &indexTable, index, nullptr);
@@ -120,8 +178,6 @@ TEST_CASE_METHOD(SimpleFixture, "can save simple", "[DynObject]") {
 }
 
 TEST_CASE_METHOD(SimpleFixture, "can edit simple", "[DynObject]") {
-  uint8_t staticBuffer[8 * NUM_STATIC_PROPERTIES];
-
   ObjectIndex *index = indexTable.allocateObject(testType, 0, 0);
 
   DynObject obj(testType, streams, &indexTable, index, nullptr);
@@ -138,8 +194,6 @@ TEST_CASE_METHOD(SimpleFixture, "can edit simple", "[DynObject]") {
 }
 
 TEST_CASE_METHOD(SimpleFixture, "returns reasonable error", "[DynObject]") {
-  uint8_t staticBuffer[8 * NUM_STATIC_PROPERTIES];
-
   ObjectIndex *index = indexTable.allocateObject(testType, 0, 0);
 
   DynObject obj(testType, streams, &indexTable, index, nullptr);
@@ -147,8 +201,6 @@ TEST_CASE_METHOD(SimpleFixture, "returns reasonable error", "[DynObject]") {
 }
 
 TEST_CASE_METHOD(ComplexFixture, "can save complex", "[DynObject]") {
-  uint8_t staticBuffer[8 * NUM_STATIC_PROPERTIES];
-
   ObjectIndex *index = indexTable.allocateObject(testType, 0, 0);
 
   DynObject obj(testType, streams, &indexTable, index, nullptr);
@@ -165,8 +217,6 @@ TEST_CASE_METHOD(ComplexFixture, "can save complex", "[DynObject]") {
 }
 
 TEST_CASE_METHOD(ComplexFixture, "can edit complex", "[DynObject]") {
-  uint8_t staticBuffer[8 * NUM_STATIC_PROPERTIES];
-
   ObjectIndex *index = indexTable.allocateObject(testType, 0, 0);
 
   DynObject obj(testType, streams, &indexTable, index, nullptr);
@@ -188,8 +238,6 @@ TEST_CASE_METHOD(ComplexFixture, "can edit complex", "[DynObject]") {
 }
 
 TEST_CASE_METHOD(ComplexFixture, "can edit array", "[DynObject]") {
-  uint8_t staticBuffer[8 * NUM_STATIC_PROPERTIES];
-
   ObjectIndex *index = indexTable.allocateObject(testType, 0, 0);
 
   DynObject obj(testType, streams, &indexTable, index, nullptr);
@@ -210,8 +258,6 @@ TEST_CASE_METHOD(ComplexFixture, "can edit array", "[DynObject]") {
 }
 
 TEST_CASE_METHOD(FixtureWithParameters, "can access parameters", "[DynObject]") {
-  uint8_t staticBuffer[8 * NUM_STATIC_PROPERTIES];
-
   ObjectIndex *index = indexTable.allocateObject(parentType, 0, 0);
 
   DynObject parent(parentType, streams, &indexTable, index, nullptr);
@@ -220,5 +266,30 @@ TEST_CASE_METHOD(FixtureWithParameters, "can access parameters", "[DynObject]") 
   DynObject test = parent.get<DynObject>("test");
 
   REQUIRE(std::any_cast<int>(test.getAny("in")) == 42);
+}
+
+TEST_CASE_METHOD(FixtureWithRTArray, "correctly indexes eos sized array of runtime custom types", "[DynObject]") {
+  ObjectIndex* index = indexTable.allocateObject(listType, 0, 0);
+
+  DynObject list(listType, streams, &indexTable, index, nullptr);
+  list.writeIndex(0, testStream->size(), true);
+
+  std::vector<DynObject> items = list.getList<DynObject>("list");
+
+  REQUIRE(items.size() == 6);
+  REQUIRE(items[5].getTypeId() == itemType->getId());
+  REQUIRE(items[5].get<int8_t>("val") == 13);
+}
+
+TEST_CASE_METHOD(FixtureWithRTPODArray, "correctly indexes eos sized array of runtime pod types", "[DynObject]") {
+  ObjectIndex* index = indexTable.allocateObject(listType, 0, 0);
+
+  DynObject list(listType, streams, &indexTable, index, nullptr);
+  list.writeIndex(0, testStream->size(), true);
+
+  std::vector<uint8_t> items = list.getList<uint8_t>("list");
+
+  REQUIRE(items.size() == 6);
+  REQUIRE(items[5] == 13);
 }
 

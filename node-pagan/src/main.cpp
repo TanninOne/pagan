@@ -5,14 +5,16 @@
  *  - support for nested data streams
  *  - support for further kaitai features
  *  - more complex write cases
- *  - unit tests
+ *  - better unit tests coverage, way to measure coverage
  *  - is the getObject call in its current form even necessary?
  *  - setList isn't implemented
+ *  - further todos, see index_format.md
  */
 
 #include "napi.h"
 #include "parserFromKSY.h"
 #include "TypeSpec.h"
+#include <algorithm>
 
 class SpecWrap : public Napi::ObjectWrap<SpecWrap> {
 public:
@@ -143,31 +145,56 @@ public:
     return m_Value;
   }
 
-  static Napi::Value getFromValue(const Napi::CallbackInfo &info, const std::shared_ptr<DynObject>& parent, const char* key, TypeSpecCatalog *catalog) {
+  static Napi::Value getFromValueCustomList(const Napi::CallbackInfo &info, const std::shared_ptr<DynObject> &parent, const char *key, TypeSpecCatalog *catalog) {
+    Napi::Array res = Napi::Array::New(info.Env());
+    uint32_t idx = 0;
+
+    for (const DynObject& obj : parent->getList<DynObject>(key)) {
+      std::shared_ptr<DynObject> tmp(new DynObject(obj));
+      Napi::Value wrap = DynObjectWrap::New(info, tmp, catalog);
+      res.Set(idx++, wrap);
+    }
+
+    return res;
+  }
+
+  static Napi::Value getFromValuePOD(const Napi::CallbackInfo& info, const std::shared_ptr<DynObject>& parent, const char* key, TypeSpecCatalog* catalog) {
+    Napi::Array res = Napi::Array::New(info.Env());
+    uint32_t idx = 0;
+
+    for (std::any val : parent->getList<std::any>(key)) {
+      std::string str = flexi_cast<std::string>(val);
+      res.Set(idx++, Napi::String::New(info.Env(), str));
+    }
+
+    return res;
+  }
+
+  static Napi::Value getFromValue(const Napi::CallbackInfo &info, const std::shared_ptr<DynObject> &parent, const char *key, TypeSpecCatalog *catalog) {
     try {
       if (!parent->has(key)) {
         return info.Env().Null();
       }
       const TypeProperty &type = parent->getChildType(key);
       if (type.isList) {
-        Napi::Array res = Napi::Array::New(info.Env());
+        bool isCustom = parent->isCustom(key);
 
-        uint32_t idx = 0;
-        if (parent->isCustom(key)) {
-          for (const DynObject &obj : parent->getList<DynObject>(key)) {
-            std::shared_ptr<DynObject> tmp(new DynObject(obj));
-            Napi::Value wrap = DynObjectWrap::New(info, tmp, catalog);
-            res.Set(idx++, wrap);
+        if (!isCustom && (parent->getChildType(key).typeId == TypeId::runtime)) {
+          // TODO currently the item type is stored with individual items and the array itself is stored
+          //   as "runtime" type, so we don't actually know if it's a custom type or not
+          try {
+            return getFromValueCustomList(info, parent, key, catalog);
           }
-        }
-        else {
-          for (std::any val : parent->getList<std::any>(key)) {
-            std::string str = flexi_cast<std::string>(val);
-            res.Set(idx++, Napi::String::New(info.Env(), str));
+          catch (const WrongTypeRequestedError&) {
+            isCustom = false;
           }
         }
 
-        return res;
+        if (isCustom) {
+          return getFromValueCustomList(info, parent, key, catalog);
+        }
+
+        return getFromValuePOD(info, parent, key, catalog);
       }
       else {
         if (parent->isCustom(key)) {
