@@ -83,3 +83,7 @@ template <typename T> void write(std::ostream &stream, const T &val) {
   LOG_F("write at {0}", stream.tellp());
   stream.write(reinterpret_cast<const char*>(&val), sizeof(T));
 }
+
+void printStack();
+void printExceptionStack();
+

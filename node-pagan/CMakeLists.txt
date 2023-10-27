@@ -18,6 +18,8 @@ message(status ${SOURCE_FILES})
 message(status ${SOURCE_FILES_PAGAN})
 message(status "Build config $<CONFIG:foobar> - ${CMAKE_BUILD_TYPE} - ${CMAKE_DEBUG_POSTFIX}")
 
+add_definitions(-DNOMINMAX)
+
 set(SOURCES ${SOURCE_FILES} ${SOURCE_FILES_PAGAN} ../pagan/format.cc)
 message(status ${SOURCES})
 
@@ -31,16 +33,19 @@ target_link_libraries(${PROJECT_NAME}
     debug ${EXTERN}/yaml-cpp/build/Debug/yaml-cppd.lib
     optimized ${EXTERN}/yaml-cpp/build/Release/yaml-cpp.lib
 )
+
+target_link_libraries(${PROJECT_NAME} ${EXTERN}/StackWalker/build/Release/StackWalker.lib)
+
 target_compile_features(${PROJECT_NAME} PRIVATE cxx_std_17)
 
 execute_process(COMMAND node -p "require('node-addon-api').include" WORKING_DIRECTORY ${CMAKE_SOURCE_DIR} OUTPUT_VARIABLE NODE_ADDON_API_DIR)
 
 string(REGEX REPLACE "[\r\n\"]" "" NODE_ADDON_API_DIR ${NODE_ADDON_API_DIR})
 
-target_include_directories(${PROJECT_NAME} PRIVATE ${NODE_ADDON_API_DIR} ${EXTERN}/PEGTL/include ${EXTERN}/yaml-cpp/include)
+target_include_directories(${PROJECT_NAME} PRIVATE ${NODE_ADDON_API_DIR} ${EXTERN}/PEGTL/include ${EXTERN}/yaml-cpp/include ${EXTERN}/StackWalker/Main/StackWalker)
 
-add_definitions(-DNAPI_VERSION=3 -DNOLOG)
-# add_definitions(-DNAPI_VERSION=3)
+# add_definitions(-DNAPI_VERSION=3 -DNOLOG)
+add_definitions(-DNAPI_VERSION=3)
 
 Include(FetchContent)
 
@@ -59,8 +64,9 @@ endif()
 file(GLOB TEST_FILES "../tests/*.cpp")
 add_executable(tests ${TEST_FILES} ../pagan/expr.cpp ../pagan/iowrap.cpp ../pagan/format.cc ../pagan/TypeSpec.cpp ../pagan/DynObject.cpp ../pagan/TypeRegistry.cpp ../pagan/typecast.cpp ../pagan/objectindex.cpp ../pagan/ObjectIndexTable.cpp ../pagan/StreamRegistry.cpp ../pagan/util.cpp)
 target_include_directories(tests PRIVATE ${Catch2_SOURCE_DIR}/single_include/catch2)
-target_include_directories(tests PRIVATE ${EXTERN}/PEGTL/include ${EXTERN}/yaml-cpp/include)
+target_include_directories(tests PRIVATE ${EXTERN}/PEGTL/include ${EXTERN}/yaml-cpp/include ${EXTERN}/StackWalker/Main/StackWalker)
 target_link_libraries(tests PRIVATE Catch2::Catch2)
+target_link_libraries(tests PRIVATE ${EXTERN}/StackWalker/build/Release/StackWalker.lib)
 target_compile_features(tests PRIVATE cxx_std_17)
 
 # generate pdbs in release builds because cmake-js doesn't support RelWithDebInfo as a build target

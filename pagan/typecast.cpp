@@ -9,7 +9,7 @@
 #define DEF_TYPE(VAL_TYPE, TYPE_ID) \
 template <> VAL_TYPE type_read(TypeId type, char *index, std::shared_ptr<IOWrapper> &data, std::shared_ptr<IOWrapper> &write, char **indexAfter) { \
   if (type != TYPE_ID) {\
-    throw IncompatibleType(fmt::format("Expected {}", TYPE_ID).c_str());\
+    throw IncompatibleType(fmt::format("Expected {}, got {}", TYPE_ID, type).c_str());\
   }\
   VAL_TYPE result;\
   memcpy(reinterpret_cast<char*>(&result), index, sizeof(VAL_TYPE));\
@@ -20,7 +20,7 @@ template <> VAL_TYPE type_read(TypeId type, char *index, std::shared_ptr<IOWrapp
 }\
 template <> char *type_write(TypeId type, char *index, std::shared_ptr<IOWrapper> &write, const VAL_TYPE &value) {\
   if (type != TYPE_ID) {\
-    throw IncompatibleType(fmt::format("Expected {}", TYPE_ID).c_str());\
+    throw IncompatibleType(fmt::format("Expected {}, got {}", TYPE_ID, type).c_str());\
   }\
   memcpy(index, reinterpret_cast<const char*>(&value), sizeof(VAL_TYPE));\
   return index + sizeof(VAL_TYPE);\
@@ -257,6 +257,8 @@ char* type_index_bits(TypeId typeId, uint8_t offset, uint8_t size, char * index,
     ptr += 1;
 
     data->read(index + 4, 4);
+    int byteOffset = (offset + size) / 8;
+    data->seekg(data->tellg() - (4 - byteOffset));
     *ptr &= mask;
 
     return index + 8;

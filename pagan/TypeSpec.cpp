@@ -47,7 +47,7 @@ ObjSize TypeSpec::indexEOSArray(const TypeProperty& prop, ObjectIndexTable* inde
 
   ObjSize count = j;
   uint32_t arraySize = static_cast<uint32_t>(curPos - tmpBuffer);
-  LOG_F("indexed eos array with {0} items", count);
+  LOG_F("indexed eos array with {} items to {:x}", count, (uint64_t)buffer);
   // std::cout << "array size " << arraySize << std::endl;
   // create a sufficiently sized array index
   ObjSize arrayOffset = indexTable->allocateArray(arraySize);
@@ -98,7 +98,7 @@ void TypeSpec::writeIndex(ObjectIndexTable *indexTable, ObjectIndex *objIndex, s
 
     if (!prop.index) {
       std::string typeName = m_Registry->getById(prop.typeId)->getName();
-      LOG_F("make index func for {0}", typeName);
+      LOG_F("make index func for {0} - list: {1}", typeName, prop.isList);
       prop.index = makeIndexFunc(prop, streams, indexTable);
     }
 
@@ -214,7 +214,7 @@ std::tuple<uint32_t, size_t> TypeSpec::get(ObjectIndex * objIndex, const char *k
   throw std::runtime_error(fmt::format("Property not found: {0}", key));
 }
 
-std::tuple<uint32_t, size_t, std::vector<std::string>> TypeSpec::getWithArgs(ObjectIndex * objIndex, const char *key) const {
+std::tuple<uint32_t, size_t, std::vector<std::string>, bool> TypeSpec::getWithArgs(ObjectIndex * objIndex, const char *key) const {
   int propertyOffset = 0;
 
   size_t bitsetBytes = (m_Sequence.size() + 7) / 8;
@@ -229,7 +229,7 @@ std::tuple<uint32_t, size_t, std::vector<std::string>> TypeSpec::getWithArgs(Obj
       if (!isBitSet(objIndex, idx)) {
         throw std::runtime_error(fmt::format("Property not set: {0}", key));
       }
-      return std::tuple<uint32_t, size_t, std::vector<std::string>>(iter->typeId, propertyOffset, iter->argList);
+      return std::tuple<uint32_t, size_t, std::vector<std::string>, bool>(iter->typeId, propertyOffset, iter->argList, iter->isList);
     }
   }
 
@@ -270,7 +270,7 @@ uint8_t *TypeSpec::indexCustom(const TypeProperty &prop, uint32_t typeId,
     throw std::runtime_error("end of stream");
   }
 
-  LOG_F("custom type {0} - static size {1}", spec->getName(), staticSize);
+  LOG_F("custom type {0} - static size {1}, num properties {2}", spec->getName(), staticSize, spec->getProperties().size());
 
   char *res = nullptr;
   if (staticSize >= 0) {
@@ -329,6 +329,7 @@ auto TypeSpec::makeIndexFunc(const TypeProperty &prop,
   if (prop.typeId == TypeId::runtime) {
     return [this, prop, indexTable, streams](uint8_t *index, const DynObject *obj, DataStreamId dataStream, std::shared_ptr<IOWrapper> data, std::streampos streamLimit) -> uint8_t* {
       // TODO: currently assumes a runtime type never resolves to bit - which I really hope is true
+      LOG_F("reset bitmask offset (1)");
       this->m_BitmaskOffset = 0;
       std::variant<std::string, int32_t> caseId = prop.switchFunc(*obj);
       auto iter = prop.switchCases.find(caseId);
@@ -336,22 +337,29 @@ auto TypeSpec::makeIndexFunc(const TypeProperty &prop,
         iter = prop.switchCases.find("_");
       }
       if (iter == prop.switchCases.end()) {
-        try {
-          throw std::runtime_error(fmt::format("Invalid switch case {0}", std::get<std::string>(caseId)));
+        // apparently it's ok for there to not be a match, in this case ignore the content, consume nothing
+        // if there is no size field
+        if (prop.hasSizeFunc) {
+          auto size = prop.size(*obj);
+          data->seekg(data->tellg() + size);
+          std::cout << "unmatched switch size " << size << std::endl;
         }
-        catch (...) {
-          throw std::runtime_error(fmt::format("Invalid switch case {0}", std::get<int32_t>(caseId)));
-
-        }
+        return index;
       }
       uint32_t typeId = iter->second;
-      LOG_F("index runtime type: {} - {}", m_Registry->getById(typeId)->getName(), typeId);
+      LOG_F("index runtime type: \"{}\" - {} at {}", m_Registry->getById(typeId)->getName(), typeId, reinterpret_cast<int64_t>(index));
 
       memcpy(index, reinterpret_cast<uint8_t*>(&typeId), sizeof(uint32_t));
       index += sizeof(uint32_t);
 
       if (typeId >= TypeId::custom) {
-        return this->indexCustom(prop, typeId, streams, indexTable, index, obj, dataStream, data, streamLimit);
+        auto before = data->tellg();
+        auto res = this->indexCustom(prop, typeId, streams, indexTable, index, obj, dataStream, data, streamLimit);
+        auto after = data->tellg();
+        if ((after - before) == 0) {
+          throw std::runtime_error(fmt::format("0 byte custom type \"{}\" could lead to endless loop", m_Registry->getById(typeId)->getName()));
+        }
+        return res;
       }
       else {
         char *res = type_index(static_cast<TypeId>(typeId), prop.size, reinterpret_cast<char*>(index), data, obj, prop.debug);
@@ -362,6 +370,7 @@ auto TypeSpec::makeIndexFunc(const TypeProperty &prop,
   else if (prop.typeId >= TypeId::custom) {
     // index custom type
     return [this, prop, indexTable, streams](uint8_t* index, const DynObject* obj, DataStreamId dataStream, std::shared_ptr<IOWrapper> data, std::streampos streamLimit) -> uint8_t* {
+      LOG_F("reset bitmask offset (2) -> {}", this->m_BitmaskOffset);
       this->m_BitmaskOffset = 0;
       LOG_F("index custom type {}", m_Registry->getById(prop.typeId)->getName());
       return this->indexCustom(prop, prop.typeId, streams, indexTable, index, obj, dataStream, data, streamLimit);
@@ -371,20 +380,19 @@ auto TypeSpec::makeIndexFunc(const TypeProperty &prop,
       uint32_t size = prop.size(*obj);
       LOG_F("index bitmask off {}, size {}", this->m_BitmaskOffset, size);
       if ((static_cast<uint64_t>(this->m_BitmaskOffset) + size) > sizeof(uint32_t) * 8) {
+        LOG_F("reset bitmask offset (3)");
         this->m_BitmaskOffset = 0;
       }
 
-      if (this->m_BitmaskOffset > 0) {
-        data->seekg(data->tellg() - 4);
-      }
-
+      LOG_F("index bitmask {}", data->tellg());
       char *res = type_index_bits(static_cast<TypeId>(prop.typeId), this->m_BitmaskOffset, size, reinterpret_cast<char*>(index), data, obj, prop.debug);
-      this->m_BitmaskOffset += size;
+      this->m_BitmaskOffset = (this->m_BitmaskOffset + size) % 8;
       return reinterpret_cast<uint8_t*>(res);
     };
   } else {
     // index pod
     return [=](uint8_t *index, const DynObject *obj, DataStreamId dataStream, std::shared_ptr<IOWrapper> data, std::streampos streamLimit) -> uint8_t* {
+      LOG_F("reset bitmask offset (4)");
       this->m_BitmaskOffset = 0;
       LOG_F("index pod type {}", m_Registry->getById(prop.typeId)->getName());
       char *res = type_index(static_cast<TypeId>(prop.typeId), prop.size, reinterpret_cast<char*>(index), data, obj, prop.debug);

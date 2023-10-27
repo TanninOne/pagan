@@ -5,6 +5,7 @@
 #include <typeindex>
 #include <iostream>
 #include <sstream>
+#include "util.h"
 
 template<typename T>
 T flexi_cast_impl(const std::any &input, std::false_type) {
@@ -38,6 +39,7 @@ struct IntegralCaster {
     }
     catch (const std::exception& e) {
       std::cout << "invalid caster type requested " << type.name() << " - " << e.what() << std::endl;
+      printExceptionStack();
       throw;
     }
   }
