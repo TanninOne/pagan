@@ -266,7 +266,16 @@ std::any DynObject::getAny(char* key) const {
     std::shared_ptr<IOWrapper> dataStream = m_Streams.get(m_ObjectIndex->dataStream);
     std::shared_ptr<IOWrapper> writeStream = m_Streams.getWrite();
 
-    return type_read_any(static_cast<TypeId>(typeId), index, dataStream, writeStream);
+    std::any result = type_read_any(static_cast<TypeId>(typeId), index, dataStream, writeStream);
+
+    // std::shared_ptr<TypeSpec> type(m_Spec->getRegistry()->getById(typeId));
+    TypeProperty prop = m_Spec->getProperty(key);
+
+    if (prop.hasEnum) {
+      return resolveEnum(prop.enumName, flexi_cast<int32_t>(result));
+    }
+
+    return result;
   }
   else if (offsetParam != -1) {
     LOG_F("get parameter {0} - {1}", offsetParam, m_Parameters.size());
@@ -313,13 +322,40 @@ std::any DynObject::getAny(const std::vector<std::string>::const_iterator &cur, 
     std::shared_ptr<IOWrapper> dataStream = m_Streams.get(m_ObjectIndex->dataStream);
     std::shared_ptr<IOWrapper> writeStream = m_Streams.getWrite();
 
-    return type_read_any(static_cast<TypeId>(typeId), index, dataStream, writeStream);
+    std::any result = type_read_any(static_cast<TypeId>(typeId), index, dataStream, writeStream);
+
+    TypeProperty prop = m_Spec->getProperty(cur->c_str());
+
+    if (prop.hasEnum) {
+      return resolveEnum(prop.enumName, flexi_cast<int32_t>(result));
+    }
+
+    return result;
   }
   else if (offsetParam != -1) {
     return m_Parameters.at(offsetParam);
   }
   else {
     throw std::runtime_error("invalid paramater");
+  }
+}
+
+inline std::string DynObject::resolveEnum(const std::string& enumName, int32_t value) const {
+  try {
+    const KSYEnum& enumMap = m_Spec->getEnumByName(enumName);
+    auto enumValue = enumMap.find(value);
+    if (enumValue == enumMap.end()) {
+      throw std::runtime_error(fmt::format("invalid enum value {0} -> {1}", enumName, value));
+    }
+    return fmt::format("{0}::{1}", enumName, enumValue->second);
+  }
+  catch (const std::exception& e) {
+    if (m_Parent != nullptr) {
+      return m_Parent->resolveEnum(enumName, value);
+    }
+    else {
+      throw;
+    }
   }
 }
 

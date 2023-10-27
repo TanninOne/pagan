@@ -20,8 +20,10 @@ struct TypeProperty {
   bool isValidated;
   bool hasSizeFunc;
   bool isSwitch;
+  bool hasEnum;
   std::string debug;
   std::string processing;
+  std::string enumName;
   IndexFunc index;
   SwitchFunc switchFunc;
   std::map<std::variant<std::string, int32_t>, uint32_t> switchCases;

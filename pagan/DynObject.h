@@ -137,6 +137,8 @@ public:
 
   std::any getAny(const std::vector<std::string>::const_iterator &cur, const std::vector<std::string>::const_iterator &end) const;
 
+  std::string resolveEnum(const std::string& enumName, int32_t value) const;
+
   void setAny(const std::vector<std::string>::const_iterator &cur,
               const std::vector<std::string>::const_iterator &end,
               const std::any &value);
@@ -261,7 +263,7 @@ inline std::vector<T> DynObject::getList(const char *key) const {
 
   union {
     struct {
-  ObjSize count;
+      ObjSize count;
       ObjSize offset;
     } arrayProp;
     uint64_t buff;

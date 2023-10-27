@@ -7,7 +7,7 @@
 #include "iowrap.h"
 
 enum TypeId {
-  int8,
+  int8 = 0,
   int16,
   int32,
   int64,

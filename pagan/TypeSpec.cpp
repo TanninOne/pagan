@@ -432,6 +432,12 @@ TypePropertyBuilder &TypePropertyBuilder::withSize(SizeFunc func) {
   return *this;
 }
 
+TypePropertyBuilder& TypePropertyBuilder::withEnum(const std::string &enumName) {
+  m_Wrappee->enumName = enumName;
+  m_Wrappee->hasEnum = true;
+  return *this;
+}
+
 TypePropertyBuilder &TypePropertyBuilder::withRepeatToEOS() {
   m_Wrappee->count = eosCount;
   m_Wrappee->isList = true;

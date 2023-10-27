@@ -6,6 +6,7 @@
 #endif
 #include <yaml-cpp/yaml.h>
 #include <charconv>
+#include <regex>
 
 typedef std::map<std::string, uint32_t> NamedTypes;
 
@@ -16,6 +17,35 @@ uint32_t getNamedType(NamedTypes &types, Parser &parser, const std::string &name
     types[name] = parser.createType(name.c_str())->getId();
   }
   return types[name];
+}
+
+std::map<std::string, KSYEnum> enumsFromYAML(const YAML::Node &spec) {
+  std::map<std::string, KSYEnum> result;
+
+  if (!spec.IsDefined()) {
+    return result;
+  }
+
+  if (!spec.IsMap()) {
+    throw std::runtime_error("expected a map");
+  }
+
+  for (YAML::const_iterator it = spec.begin(); it != spec.end(); ++it) {
+    if (!it->second.IsMap()) {
+      throw std::runtime_error("expected a map");
+    }
+
+    KSYEnum enm;
+
+    for (YAML::const_iterator keys = it->second.begin(); keys != it->second.end(); ++keys) {
+      // enm[keys->second.as<std::string>()] = keys->first.as<int32_t>();
+      enm[keys->first.as<int32_t>()] = keys->second.as<std::string>();
+    }
+
+    result[it->first.as<std::string>()] = enm;
+  }
+ 
+  return result;
 }
 
 std::map<std::variant<std::string, int32_t>, uint32_t> makeCases(const YAML::Node &spec, NamedTypes &types, Parser &parser) {
@@ -47,14 +77,27 @@ std::map<std::variant<std::string, int32_t>, uint32_t> makeCases(const YAML::Nod
   }
 }
 
+std::string trimRight(const std::string& input) {
+  static std::regex expr(R"(\s+$)");
+  return std::regex_replace(input, expr, std::string(""));
+}
+
 void addInstances(Parser& parser, std::shared_ptr<TypeSpec> &type, const YAML::Node& spec) {
   if (!spec.IsDefined() || !spec.IsMap()) {
     return;
   }
 
   for (YAML::const_iterator it = spec.begin(); it != spec.end(); ++it) {
-    type->addComputed(it->first.as<std::string>().c_str(), makeFunc<std::any>(it->second["value"].as<std::string>()));
+    type->addComputed(it->first.as<std::string>().c_str(), makeFunc<std::any>(trimRight(it->second["value"].as<std::string>())));
   }
+}
+
+void addEnums(Parser &parser, std::shared_ptr<TypeSpec> &type, const YAML::Node &spec) {
+  if (!spec.IsDefined() || !spec.IsMap()) {
+    return;
+  }
+
+  type->addEnums(enumsFromYAML(spec));
 }
 
 uint32_t determineType(Parser &parser, NamedTypes &types, YAML::Node typeNode, uint32_t &fixedSize, std::vector<std::string> &argList) {
@@ -73,17 +116,12 @@ uint32_t determineType(Parser &parser, NamedTypes &types, YAML::Node typeNode, u
   else {
     std::string typeIdStr = typeNode.as<std::string>();
     std::tie(typeIdStr, argList) = TypeRegistry::splitTypeName(typeIdStr.c_str());
-    LOG_F("typeid {}", typeIdStr);
     if ((typeIdStr[0] == 'b') && (typeIdStr.length() <= 3)) {
-      LOG_F("might be bits?");
-
       // might be bits but can't be sure yet
       const char* buf = typeIdStr.c_str();
       int bitCount = 0;
       auto [ptr, ec] { std::from_chars(buf + 1, buf + typeIdStr.length(), bitCount) };
-      LOG_F("might be bits? {} - {}", ptr, (int)ec);
       if ((ec == std::errc()) && (*ptr == '\0')) {
-        LOG_F("yes bits {}", bitCount);
         typeId = bits;
         fixedSize = bitCount;
       }
@@ -149,6 +187,10 @@ void addProperties(Parser &parser, NamedTypes &types, std::shared_ptr<TypeSpec> 
     }
     else if (fixedSize > 0) {
       prop.withSize(makeFunc<ObjSize>(std::to_string(fixedSize)));
+    }
+
+    if (entry["enum"].IsDefined()) {
+      prop.withEnum(entry["enum"].as<std::string>());
     }
 
     if (argList.size() > 0) {
@@ -264,36 +306,6 @@ void addSubTypes(Parser &parser, NamedTypes &types, const YAML::Node &spec) {
   }
 }
 
-typedef std::map<std::string, int32_t> KSYEnum;
-
-std::map<std::string, KSYEnum> enumsFromYAML(const YAML::Node &spec) {
-  std::map<std::string, KSYEnum> result;
-
-  if (!spec.IsDefined()) {
-    return result;
-  }
-
-  if (!spec.IsMap()) {
-    throw std::runtime_error("expected a map");
-  }
-
-  for (YAML::const_iterator it = spec.begin(); it != spec.end(); ++it) {
-    if (!it->second.IsMap()) {
-      throw std::runtime_error("expected a map");
-    }
-
-    KSYEnum enm;
-
-    for (YAML::const_iterator keys = it->second.begin(); keys != it->second.end(); ++keys) {
-      enm[keys->second.as<std::string>()] = keys->first.as<int32_t>();
-    }
-
-    result[it->first.as<std::string>()] = enm;
-  }
- 
-  return result;
-}
-
 void createTypeFromYAML(Parser &parser,
                         NamedTypes &types,
                         const char *name,
@@ -306,6 +318,7 @@ void createTypeFromYAML(Parser &parser,
   LOG_F("add properties {0}", type->getId());
   addProperties(parser, types, type, spec["seq"]);
   addInstances(parser, type, spec["instances"]);
+  addEnums(parser, type, spec["enums"]);
 }
 
 void initBaseTypes(NamedTypes &types) {
@@ -340,7 +353,6 @@ std::shared_ptr<Parser> parserFromKSY(const char *specFileName) {
   NamedTypes namedTypes;
   initBaseTypes(namedTypes);
 
-  std::map<std::string, KSYEnum> enums = enumsFromYAML(spec["enums"]);
   createTypeFromYAML(*parser, namedTypes, "root", spec);
 
   return parser;

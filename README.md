@@ -1,13 +1,14 @@
 # Pagan
 
 Pagan is a dynamic parser and editor library for binary files.
-Various file formats can be specified through a yaml based description language.
+Many file formats can be specified through a yaml based description language, closely mirroring the ksy format from kaitai struct.
+Format specifications are interpreted at runtime to produce a parser, meaning that no coding or compilation is required to iterate on the specification
 
 ## Development status
 
-Early Alpha
+Prototype state
 
-I work on this as time permits. Pull requests and offers for help are welcome, as far as feature requests or bug reports are concerned: probably not worth your time tbh, there is plenty of work for the foreseeable future.
+My intended use case for this project has mostly disappeared so I now work on this very unfrequently.
 
 ## Language support
 

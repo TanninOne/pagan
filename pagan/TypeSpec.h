@@ -16,7 +16,7 @@
 #include "streamregistry.h"
 #include "util.h"
 #include "objectindextable.h"
-#include "dynobject.h"
+#include "DynObject.h"
 #include "constants.h"
 #include "typeproperty.h"
 
@@ -75,6 +75,7 @@ public:
 
   TypePropertyBuilder &withCondition(ConditionFunc func);
   TypePropertyBuilder &withSize(SizeFunc func);
+  TypePropertyBuilder &withEnum(const std::string &enumName);
   TypePropertyBuilder &withRepeatToEOS();
   TypePropertyBuilder &withCount(SizeFunc func);
   TypePropertyBuilder &withTypeSwitch(SwitchFunc func, const std::map<std::variant<std::string, int32_t>, uint32_t> &cases);
@@ -145,8 +146,8 @@ public:
       else {
         addStaticSize(type);
       }
+      LOG_F("size after append {0}", m_StaticSize);
     });
-    LOG_F("size after append {0}", m_StaticSize);
   }
 
   TypePropertyBuilder appendProperty(const char *key, TypeId type) {
@@ -156,6 +157,10 @@ public:
   void addComputed(const char* key, ComputeFunc func) {
     LOG_F("add computed {0} - {1}", m_Id, key);
     m_Computed[key] = func;
+  }
+
+  void addEnums(const std::map<std::string, KSYEnum>& enums) {
+    m_Enums = enums;
   }
 
   int32_t getStaticSize() const {
@@ -198,6 +203,7 @@ public:
         uint64_t dataOffset = data->tellg();
         ObjSize arrayOffset = indexTable->allocateArray(16);
         uint8_t* curPos = indexTable->arrayAddress(arrayOffset);
+        LOG_F("allocate eos array data {}, arrayidx {}, arrayref {}, eos {}", dataOffset, arrayOffset, (uint64_t)curPos, streamLimit);
         memcpy(curPos, reinterpret_cast<char*>(&dataOffset), sizeof(uint64_t));
         memcpy(curPos + sizeof(uint64_t), reinterpret_cast<char*>(&streamLimit), sizeof(uint64_t));
 
@@ -224,7 +230,7 @@ public:
     }
     else {
       // no list, index single item
-      LOG_F("index prop {} (type {}) at {}", prop.key, m_Registry->getById(prop.typeId)->getName(), data->tellg());
+      LOG_F("index prop {} (type {}) at {}/{}", prop.key, m_Registry->getById(prop.typeId)->getName(), data->tellg(), data->size());
       return prop.index(buffer, obj, dataStream, data, streamLimit);
     }
   }
@@ -243,6 +249,15 @@ public:
     return m_Sequence[iter->second];
   }
 
+  const KSYEnum &getEnumByName(const std::string &enumName) const {
+    auto iter = m_Enums.find(enumName);
+    if (iter == m_Enums.end()) {
+      // search will continue in the parent, this is only an issue if there is no parent
+      throw std::runtime_error(fmt::format("invalid enum name: {0}", enumName));
+    }
+    return iter->second;
+  }
+
   bool hasComputed(const char* key) const {
     return m_Computed.find(key) != m_Computed.end();
   }
@@ -252,7 +267,7 @@ public:
   }
 
   std::tuple<uint32_t, size_t> get(ObjectIndex *objIndex, const char *key) const;
-  std::tuple<uint32_t, size_t, std::vector<std::string>> getWithArgs(ObjectIndex *objIndex, const char *key) const;
+  std::tuple<uint32_t, size_t, std::vector<std::string>, bool> getWithArgs(ObjectIndex *objIndex, const char *key) const;
 
   std::tuple<uint32_t, int, int> getPorP(ObjectIndex* objIndex, const char* key) const;
 
@@ -368,6 +383,7 @@ private:
   std::vector<TypeProperty> m_Sequence;
   std::map<std::string, int> m_SequenceIdx;
   std::map<std::string, ComputeFunc> m_Computed;
+  std::map<std::string, KSYEnum> m_Enums;
   uint16_t m_IndexSize{0};
   uint32_t m_Id;
   int32_t m_StaticSize;
