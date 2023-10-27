@@ -18,6 +18,26 @@ namespace pegtl = tao::TAO_PEGTL_NAMESPACE;
 
 typedef std::function<std::any(const std::any& args)> AnyFunc;
 
+/* This does not work correctly for some reason, Expression are not replaced by Infix nodes
+struct MyNode : public pegtl::parse_tree::node {
+  template< typename Rule, typename Input, typename... States >
+  void success(const Input& in, States&&... states) noexcept
+  {
+    std::cout << "parse success " << in.current() << std::endl;
+    pegtl::parse_tree::basic_node<MyNode>::success<Rule, Input, States...>(in, std::forward<States>(states)...);
+  }
+
+  // if parsing of the rule failed, this method is called
+  template< typename Rule, typename Input, typename... States >
+  void failure(const Input& in, States&&... unused) noexcept
+  {
+    std::cout << "parse failure " << in.current() << std::endl;
+  }
+};
+*/
+
+typedef pegtl::parse_tree::node MyNode;
+
 template <typename T>
 bool equal(const std::any &lhs, const std::any &rhs) {
   return flexi_cast<T>(lhs) == flexi_cast<T>(rhs);
@@ -175,6 +195,8 @@ namespace ExpressionSpec {
   public:
     Operators()
     {
+      // TODO: The functions here aren't currently used, this code is only used to parse the operations into a tree, the evaluation happens
+      //   in evalNode
       insert("*", Order(5), [](const std::any &lhs, const std::any &rhs) { return flexi_cast<int64_t>(lhs) * flexi_cast<int64_t>(rhs); });
       insert("/", Order(5), [](const std::any &lhs, const std::any &rhs) { return flexi_cast<int64_t>(lhs) / flexi_cast<int64_t>(rhs); });
       insert("%", Order(5), [](const std::any &lhs, const std::any &rhs) { return flexi_cast<int64_t>(lhs) % flexi_cast<int64_t>(rhs); });
@@ -186,7 +208,7 @@ namespace ExpressionSpec {
       insert(">", Order(8), [](const std::any &lhs, const std::any &rhs) { return flexi_cast<int64_t>(lhs) > flexi_cast<int64_t>(rhs); });
       insert("<=", Order(8), [](const std::any &lhs, const std::any &rhs) { return flexi_cast<int64_t>(lhs) <= flexi_cast<int64_t>(rhs); });
       insert(">=", Order(8), [](const std::any &lhs, const std::any &rhs) { return flexi_cast<int64_t>(lhs) >= flexi_cast<int64_t>(rhs); });
-      insert("==", Order(9), [](const std::any& lhs, const std::any& rhs) { return any_equal(lhs, rhs); });
+      insert("==", Order(9), [](const std::any &lhs, const std::any &rhs) {return any_equal(lhs, rhs); });
       insert("!=", Order(9), [](const std::any &lhs, const std::any &rhs) { return !any_equal(lhs, rhs); });
       insert("&", Order(10), [](const std::any &lhs, const std::any &rhs) { return flexi_cast<int64_t>(lhs) & flexi_cast<int64_t>(rhs); });
       insert("^", Order(11), [](const std::any &lhs, const std::any &rhs) { return flexi_cast<int64_t>(lhs) ^ flexi_cast<int64_t>(rhs); });
@@ -195,6 +217,12 @@ namespace ExpressionSpec {
       insert("and", Order(13), [](const std::any &lhs, const std::any &rhs) { return flexi_cast<bool>(lhs) && flexi_cast<bool>(rhs); });
       insert("||", Order(14), [](const std::any &lhs, const std::any &rhs) { return flexi_cast<bool>(lhs) || flexi_cast<bool>(rhs); });
       insert("or", Order(14), [](const std::any &lhs, const std::any &rhs) { return flexi_cast<bool>(lhs) || flexi_cast<bool>(rhs); });
+      insert("?", Order(15), [](const std::any& lhs, const std::any& rhs) -> std::any {
+        throw std::runtime_error("ternary not implemented");
+        });
+      insert(":", Order(15), [](const std::any& lhs, const std::any& rhs) -> std::any {
+        throw std::runtime_error("ternary not implemented");
+        });
     }
 
     void insert(const std::string& name, const Order order, const std::function<std::any(std::any, std::any) > &func)
@@ -251,6 +279,7 @@ namespace ExpressionSpec {
 
       auto iter = ops.ops().lower_bound(t);
       while ((t.length() > 0) && ((iter == ops.ops().end()) || (iter->first != t))) {
+        // operator not found, might be the parameter is only the first character
         t.pop_back();
         iter = ops.ops().lower_bound(t);
       }
@@ -273,15 +302,13 @@ namespace ExpressionSpec {
   struct Expression;
   struct Function;
   struct Not;
-  struct Ternary;
-  struct Bracket : if_must<one<'('>, Expression, one<')'>> {};
+  struct Bracket : if_must<one<'('>, star<Ignored>, Expression, star<Ignored>, one<')'>> {};
   struct Atomic : sor<HexNumber, Not, Number, String, Function, Identifier, Bracket> {};
-  struct Ternary : seq<Expression, star<Ignored>, one<'?'>, star<Ignored>, Expression, star<Ignored>, one<':'>, star<Ignored>, Expression> {};
   struct Not : seq<sor<istring<'n', 'o', 't', ' '>, one<'!'>>, Atomic> {};
   struct Assignment : seq<Identifier, star<Ignored>, one<'='>, star<Ignored>, Expression> {};
   struct Function : seq<Identifier, one<'('>, Atomic, one<')'>> {};
   struct Expression : list<Atomic, Infix, Ignored> {};
-  struct Grammar : must<sor<Assignment, Ternary, Expression>, eof> {};
+  struct Grammar : must<sor<Assignment, Expression>, eof> {};
 
   template<typename Rule>
   struct Action : pegtl::nothing<Rule> {};
@@ -358,13 +385,13 @@ namespace ExpressionSpec {
   template <typename Rule>
   using Selector = pegtl::parse_tree::selector<
     Rule,
-    pegtl::parse_tree::apply_store_content::to<Number, Not, HexNumber, String, Identifier, Ternary, Function, Infix>,
+    pegtl::parse_tree::apply_store_content::to<Number, Not, HexNumber, String, Identifier, Function, Infix>,
     pegtl::parse_tree::apply_remove_content::to<>,
     pegtl::parse_tree::apply<Rearrange>::to<Expression>
   >;
 }
 
-static void printNode(const pegtl::parse_tree::node &node, const std::string &indent = "") {
+static void printNode(const MyNode &node, const std::string &indent = "") {
   if (node.is_root()) {
     std::cout << "root \"" << node.content() << "\" at " << node.begin() << " to " << node.end() << " - " << node.is<ExpressionSpec::Not>() << std::endl;
   } else {
@@ -387,7 +414,15 @@ static std::map<std::string, std::function<std::any(const std::any&, const std::
   { "*", [](const std::any &lhs, const std::any &rhs) { return flexi_cast<int64_t>(lhs) * flexi_cast<int64_t>(rhs); } },
   { "/", [](const std::any &lhs, const std::any &rhs) { return flexi_cast<int64_t>(lhs) / flexi_cast<int64_t>(rhs); }},
   { "%", [](const std::any &lhs, const std::any &rhs) { return flexi_cast<int64_t>(lhs) % flexi_cast<int64_t>(rhs); }},
-  { "+", [](const std::any &lhs, const std::any &rhs) { return flexi_cast<int64_t>(lhs) + flexi_cast<int64_t>(rhs); }},
+  { "+", [](const std::any &lhs, const std::any &rhs) -> std::any {
+    // script language supports + for string concatenation
+    if (lhs.type() == typeid(std::string)) {
+      return flexi_cast<std::string>(lhs) + flexi_cast<std::string>(rhs);
+    }
+    else {
+      return flexi_cast<int64_t>(lhs) + flexi_cast<int64_t>(rhs);
+    }
+  }},
   { "-", [](const std::any &lhs, const std::any &rhs) { return flexi_cast<int64_t>(lhs) - flexi_cast<int64_t>(rhs); }},
   { "<<", [](const std::any &lhs, const std::any &rhs) { return flexi_cast<int64_t>(lhs) << flexi_cast<int64_t>(rhs); }},
   { ">>", [](const std::any &lhs, const std::any &rhs) { return flexi_cast<int64_t>(lhs) >> flexi_cast<int64_t>(rhs); }},
@@ -402,10 +437,12 @@ static std::map<std::string, std::function<std::any(const std::any&, const std::
   { "|", [](const std::any &lhs, const std::any &rhs) { return flexi_cast<int64_t>(lhs) | flexi_cast<int64_t>(rhs); }},
   { "&&", [](const std::any &lhs, const std::any &rhs) { return flexi_cast<bool>(lhs) && flexi_cast<bool>(rhs); }},
   { "||", [](const std::any &lhs, const std::any &rhs) { return flexi_cast<bool>(lhs) || flexi_cast<bool>(rhs); }},
+  { "?", [](const std::any& lhs, const std::any& rhs) -> std::any { throw std::runtime_error("ternary operation should be handled directly"); }},
+  { ":", [](const std::any& lhs, const std::any& rhs) -> std::any { throw std::runtime_error("ternary operation should be handled directly"); }},
 };
 
 
-static std::any evalNode(const pegtl::parse_tree::node& node, const ExpressionSpec::VariableResolver& resolver, const ExpressionSpec::VariableAssigner& assigner, std::map<std::pair<uint64_t, uint64_t>, std::string> &identifiers) {
+static std::any evalNode(const MyNode& node, const ExpressionSpec::VariableResolver& resolver, const ExpressionSpec::VariableAssigner& assigner, std::map<std::pair<uint64_t, uint64_t>, std::string> &identifiers) {
   if (node.is_root()) {
     std::any res = evalNode(**node.children.rbegin(), resolver, assigner, identifiers);
     if (node.children.size() == 2) {
@@ -417,6 +454,10 @@ static std::any evalNode(const pegtl::parse_tree::node& node, const ExpressionSp
     return res;
   }
 
+  if (node.is<ExpressionSpec::Expression>()) {
+    throw std::runtime_error("unresolved expression");
+  }
+
   std::pair<uint64_t, uint64_t> idKey(node.begin().byte, node.end().byte);
   auto id = identifiers.find(idKey);
   if (id == identifiers.end()) {
@@ -426,14 +467,33 @@ static std::any evalNode(const pegtl::parse_tree::node& node, const ExpressionSp
 
   if (node.is<ExpressionSpec::Infix>()) {
     const auto& iter = operators.find(id->second);
+    if (iter->first == ":") {
+      // infix operator. first node contains the expression ? true-value part
+      std::any lhs = evalNode(*(node.children.at(0)), resolver, assigner, identifiers);
+      if (lhs.has_value()) {
+        return lhs;
+      } else {
+        return evalNode(*(node.children.at(1)), resolver, assigner, identifiers);
+      }
+    }
+    else if (iter->first == "?") {
+      std::any cond = evalNode(*(node.children.at(0)), resolver, assigner, identifiers);
+      if (std::any_cast<bool>(cond)) {
+        return evalNode(*(node.children.at(1)), resolver, assigner, identifiers);
+      }
+      else {
+        return std::any();
+      }
+    }
 
     std::any lhs = evalNode(*(node.children.at(0)), resolver, assigner, identifiers);
     std::any rhs = evalNode(*(node.children.at(1)), resolver, assigner, identifiers);
-    return (iter->second)(lhs, rhs);
-  } else if (node.is<ExpressionSpec::Ternary>()) {
-    std::any lhs = evalNode(*(node.children.at(0)), resolver, assigner, identifiers);
-    bool cond = std::any_cast<bool>(lhs);
-    return evalNode(*(node.children.at(cond ? 1 : 2)), resolver, assigner, identifiers);
+    try {
+      return (iter->second)(lhs, rhs);
+    }
+    catch (const std::exception &err) {
+      throw;
+    }
   } else if (node.is<ExpressionSpec::Function>()) {
     std::any arg = evalNode(*(node.children.at(1)), resolver, assigner, identifiers);
     AnyFunc func = std::any_cast<AnyFunc>(evalNode(*(node.children.at(0)), resolver, assigner, identifiers));
@@ -464,15 +524,13 @@ std::function<T(const IScriptQuery &)> makeFuncImpl(const std::string &code) {
   // worth it since we don't expect the function to be cleaned until the process ends
   pegtl::string_input<> *expressionString = new pegtl::string_input<>(code, "source");
   auto tree =
-    pegtl::parse_tree::parse<ExpressionSpec::Grammar, ExpressionSpec::Selector>(*expressionString, operators).release();
-
-  // printNode(*tree);
+    pegtl::parse_tree::parse<ExpressionSpec::Grammar, MyNode, ExpressionSpec::Selector>(*expressionString, operators).release();
 
   std::map<uint64_t, std::vector<std::string>> variables;
   std::map<std::pair<uint64_t, uint64_t>, std::string> identifiers;
 
-  return [tree, variables, identifiers](const IScriptQuery &obj) mutable -> T {
-    ExpressionSpec::VariableResolver resolver = [&obj, &variables](const std::string &key, uint64_t id) -> std::any {
+  return [&code, tree, variables, identifiers](const IScriptQuery &obj) mutable -> T {
+    ExpressionSpec::VariableResolver resolver = [&code, &obj, &variables](const std::string &key, uint64_t id) -> std::any {
       auto varIter = variables.find(id);
       if (varIter == variables.end()) {
         variables.insert(std::pair<uint64_t, std::vector<std::string>>(id, splitVariable(key)));
@@ -501,7 +559,7 @@ std::function<T(IScriptQuery &, const std::any&)> makeFuncMutableImpl(const std:
   // worth it since we don't expect the function to be cleaned until the process ends
   pegtl::string_input<> *expressionString = new pegtl::string_input<>(code, "source");
   auto tree =
-    pegtl::parse_tree::parse<ExpressionSpec::Grammar, ExpressionSpec::Selector>(*expressionString, operators).release();
+    pegtl::parse_tree::parse<ExpressionSpec::Grammar, MyNode, ExpressionSpec::Selector>(*expressionString, operators).release();
 
   // printNode(*tree);
 
@@ -521,8 +579,8 @@ std::function<T(IScriptQuery &, const std::any&)> makeFuncMutableImpl(const std:
   std::map<uint64_t, std::vector<std::string>> variables;
   std::map<std::pair<uint64_t, uint64_t>, std::string> identifiers;
 
-  return [tree, variables, identifiers](IScriptQuery &obj, const std::any& value) mutable -> T {
-    ExpressionSpec::VariableResolver resolver = [&obj, &variables, &value](const std::string &key, uint64_t id) -> std::any {
+  return [code, tree, variables, identifiers](IScriptQuery &obj, const std::any& value) mutable -> T {
+    ExpressionSpec::VariableResolver resolver = [&code, &obj, &variables, &value](const std::string &key, uint64_t id) -> std::any {
       if (key == "value") {
         return value;
       }
@@ -560,7 +618,7 @@ inline std::function<T(const IScriptQuery &)> makeFunc(const std::string &code) 
     return makeFuncImpl<T>(code);
   }
   catch (const std::exception& e) {
-    throw std::runtime_error(fmt::format("failed to compile function \"{}\"", code).c_str());
+    throw std::runtime_error(fmt::format("failed to compile function \"{}\": {}", code, e.what()).c_str());
   }
 }
 
@@ -576,7 +634,7 @@ inline std::function<int32_t(const IScriptQuery &)> makeFunc(const std::string &
     return makeFuncImpl<int32_t>(code);
   }
   catch (const std::exception& e) {
-    throw std::runtime_error(fmt::format("failed to compile function \"{}\"", code).c_str());
+    throw std::runtime_error(fmt::format("failed to compile function \"{}\": {}", code, e.what()).c_str());
   }
 }
 
@@ -586,6 +644,6 @@ inline std::function<T(IScriptQuery &, const std::any&)> makeFuncMutable(const s
     return makeFuncMutableImpl<T>(code);
   }
   catch (const std::exception& e) {
-    throw std::runtime_error(fmt::format("failed to compile function \"{}\"", code).c_str());
+    throw std::runtime_error(fmt::format("failed to compile function \"{}\": {}", code, e.what()).c_str());
   }
 }

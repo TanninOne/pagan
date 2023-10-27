@@ -50,8 +50,8 @@ public:
 
 TEST_CASE("can make getter func", "[expr]") {
   TestQuery query(std::any(2));
-  auto yes = makeFunc<int>("x == 2");
-  auto no = makeFunc<int>("x == 3");
+  auto yes = makeFunc<bool>("x == 2");
+  auto no = makeFunc<bool>("x == 3");
 
   REQUIRE(yes(query) == true);
   REQUIRE(no(query) == false);
@@ -131,9 +131,25 @@ TEST_CASE("language features", "[expr]") {
   // ternary
   REQUIRE(makeFunc<int>("(x == 2) ? 42 : 666")(query) == 42);
   REQUIRE(makeFunc<int>("(x == 2) ? (21 * 2) : (22 * 30 + 6)")(query) == 42);
+  REQUIRE(makeFunc<int>("5 + ((x == 2) ? (21 * 2) : (22 * 30 + 6))")(query) == 47);
+  // complex term from .rar
+  REQUIRE(makeFunc<std::string>("(year <= 999 ? (\"0\" + (year <= 99 ? (\"0\" + (year <= 9 ? \"0\" : \"\")) : \"\")) : \"\") + year.to_s")(query) == "0002");
+  // same term with line breaks
+  REQUIRE(makeFunc<std::string>("(year <= 999 ? (\"0\" +\r\n  (year <= 99 ? (\"0\" +\r\n    (year <= 9 ? \"0\" : \"\")\r\n  ) : \"\")\r\n) : \"\") + year.to_s")(query) == "0002");
 
   // not implemented
   // REQUIRE(makeFunc<int>("24 * ((x == 2) ? 2 : 28) - 6")(query) == 42);
+}
+
+TEST_CASE("supports multi-line statements", "[expr]") {
+  TestQuery query(std::any(2));
+  REQUIRE(makeFunc<int>("2\n+\nx")(query) == 4);
+  REQUIRE(makeFunc<int>("1 + (\n1 + x\n)")(query) == 4);
+  REQUIRE(makeFunc<std::string>("(year <= 999 ? (\"0\" +\n\
+    (year <= 99 ? (\"0\" +\n\
+      (year <= 9 ? \"0\" : \"\")\n\
+        ) : \"\")\n\
+      ) : \"\") + year.to_s"));
 }
 
 TEST_CASE("setter can access block size", "[expr]") {
