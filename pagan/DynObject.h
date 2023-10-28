@@ -177,6 +177,8 @@ public:
 
   template <typename T> void setList(const char *key, const std::vector<T> &value);
 
+  DynObject getArrayItem(uint32_t typeId, uint8_t** arrayCur) const;
+
 private:
 
   DynObject getObjectAtOffset(std::shared_ptr<TypeSpec> type,
@@ -287,7 +289,8 @@ inline std::vector<T> DynObject::getList(const char *key) const {
     memcpy(reinterpret_cast<char*>(&streamLimit), arrayData + sizeof(uint64_t), sizeof(uint64_t));
     data->seekg(arrayDataPos);
     m_Spec->indexEOSArray(prop, m_IndexTable, m_ObjectIndex->properties + offset,
-                          this, m_ObjectIndex->dataStream, data, streamLimit);
+                          this, m_ObjectIndex->dataStream, data, streamLimit,
+                          [](uint8_t*) { return false; });
 
     // update array info
     buff = *reinterpret_cast<uint64_t*>(m_ObjectIndex->properties + offset);

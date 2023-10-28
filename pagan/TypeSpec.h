@@ -16,7 +16,7 @@
 #include "streamregistry.h"
 #include "util.h"
 #include "objectindextable.h"
-// #include "DynObject.h"
+#include "DynObject.h"
 #include "constants.h"
 #include "typeproperty.h"
 

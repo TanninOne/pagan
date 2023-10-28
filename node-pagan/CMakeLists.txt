@@ -14,14 +14,9 @@ list(FILTER SOURCE_FILES_PAGAN EXCLUDE REGEX ".*/mainesp.cpp")
 set(EXTERN "${CMAKE_SOURCE_DIR}/../extern")
 set(CMAKE_DEBUG_POSTFIX "d")
 
-message(status ${SOURCE_FILES})
-message(status ${SOURCE_FILES_PAGAN})
-message(status "Build config $<CONFIG:foobar> - ${CMAKE_BUILD_TYPE} - ${CMAKE_DEBUG_POSTFIX}")
-
 add_definitions(-DNOMINMAX)
 
 set(SOURCES ${SOURCE_FILES} ${SOURCE_FILES_PAGAN} ../pagan/format.cc)
-message(status ${SOURCES})
 
 add_library(${PROJECT_NAME} SHARED ${HEADER_FILES} ${HEADER_FILES_PAGAN} ${SOURCES} ${CMAKE_JS_SRC})
 
@@ -52,7 +47,7 @@ Include(FetchContent)
 FetchContent_Declare(
  Catch2
  GIT_REPOSITORY https://github.com/catchorg/Catch2.git
- GIT_TAG        v2.13.1)
+ GIT_TAG        v2.13.9)
 
 FetchContent_MakeAvailable(Catch2)
 FetchContent_GetProperties(Catch2)
