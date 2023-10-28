@@ -1,8 +1,9 @@
 #include "TypeSpec.h"
 #include "DynObject.h"
+#include <numeric>
 
 TypeSpec::TypeSpec(const char *name, uint32_t typeId, TypeRegistry *registry)
-  : m_Name(name), m_Registry(registry), m_Id(typeId), m_StaticSize(0)
+  : m_Name(name), m_Registry(registry), m_Id(typeId), m_StaticSize(0), m_BaseBuffer()
 {
 }
 
@@ -10,10 +11,15 @@ TypeSpec::~TypeSpec()
 {
 }
 
-ObjSize TypeSpec::indexEOSArray(const TypeProperty& prop, ObjectIndexTable* indexTable, uint8_t* buffer, const DynObject* obj, DataStreamId dataStream, std::shared_ptr<IOWrapper> data, std::streampos streamLimit) {
-  // std::vector<uint8_t> tmpArrayBuffer(8 * NUM_STATIC_PROPERTIES);
-  // uint8_t *curPos = &tmpArrayBuffer[0];
-  // uint8_t *endPos = curPos + tmpArrayBuffer.size();
+ObjSize TypeSpec::indexEOSArray(const TypeProperty& prop,
+                                ObjectIndexTable* indexTable,
+                                uint8_t* buffer,
+                                const DynObject* obj,
+                                DataStreamId dataStream,
+                                std::shared_ptr<IOWrapper> data,
+                                std::streampos streamLimit,
+                                std::function<bool(uint8_t*)> repeatCondition) {
+
   uint32_t size = NUM_STATIC_PROPERTIES * 8;
   uint8_t* tmpBuffer = m_BaseBuffer;
   memset(tmpBuffer, 0, 8 * NUM_STATIC_PROPERTIES);
@@ -23,8 +29,14 @@ ObjSize TypeSpec::indexEOSArray(const TypeProperty& prop, ObjectIndexTable* inde
   int j = 0;
   try {
     while (data->tellg() < streamLimit) {
+      uint8_t *itemPos = curPos;
       curPos = prop.index(curPos, obj, dataStream, data, streamLimit);
+      // repeatCondition returns true if the loop should be canceled
+      if ((repeatCondition != nullptr) && repeatCondition(itemPos)) {
+        break;
+      }
       if (curPos + 8 >= endPos) {
+        // reallocate buffer if necessary
         const size_t offset = curPos - tmpBuffer;
         // tmpArrayBuffer.resize(tmpArrayBuffer.size() * 2);
         size *= 2;
@@ -38,11 +50,9 @@ ObjSize TypeSpec::indexEOSArray(const TypeProperty& prop, ObjectIndexTable* inde
       ++j;
     }
   }
-  catch (const std::exception& e) {
+  catch (const std::ios::failure& e) {
     // TODO: assuming this is an eof exception
-    LOG_F("eos loop canceled: {}", e.what());
-    // if (tmpBuffer != m_BaseBuffer) { delete [] tmpBuffer; }
-    // throw e;
+    LOG_F("dynamic length loop canceled: {}", e.what());
   }
 
   ObjSize count = j;
@@ -51,8 +61,10 @@ ObjSize TypeSpec::indexEOSArray(const TypeProperty& prop, ObjectIndexTable* inde
   // std::cout << "array size " << arraySize << std::endl;
   // create a sufficiently sized array index
   ObjSize arrayOffset = indexTable->allocateArray(arraySize);
+
   // store the array index
   memcpy(indexTable->arrayAddress(arrayOffset), tmpBuffer, arraySize);
+
   // buffer receives the effective number of items and the offset into the array index
   memcpy(buffer, reinterpret_cast<char*>(&count), sizeof(ObjSize));
   memcpy(buffer + sizeof(ObjSize), reinterpret_cast<char*>(&arrayOffset), sizeof(ObjSize));
@@ -61,6 +73,73 @@ ObjSize TypeSpec::indexEOSArray(const TypeProperty& prop, ObjectIndexTable* inde
   }
 
   return count;
+}
+
+/**
+* index the specified property for this object to the buffer.
+* After this call the read pointer of the data stream has to be positioned after the
+* property data
+*/
+
+uint8_t* TypeSpec::readPropToBuffer(const TypeProperty& prop, ObjectIndexTable* indexTable, uint8_t* buffer, DynObject* obj, const StreamRegistry &streams, DataStreamId dataStream, std::shared_ptr<IOWrapper> data, std::streampos streamLimit) {
+    if (prop.processing != "") {
+        throw std::runtime_error("processing not supported");
+    }
+    // LOG_F("read prop to buffer {} type {} (list: {})", prop.key, prop.typeId, prop.isList);
+    if (prop.isList) {
+        ObjSize count = prop.count(*obj);
+
+        LOG_BRACKET_F("indexing array type {}, count {}", m_Registry->getById(prop.typeId)->getName(), count);
+
+        if (count == COUNT_EOS) {
+            // unknown number of items but we know the total size of items.
+            // we use the array index to store start and size in the data stream, so that it can later be
+            // lazy loaded easily
+            uint64_t dataOffset = data->tellg();
+            ObjSize arrayOffset = indexTable->allocateArray(16);
+            uint8_t* curPos = indexTable->arrayAddress(arrayOffset);
+            LOG_F("allocate eos array data {}, arrayidx {}, arrayref {}, eos {}", dataOffset, arrayOffset, (uint64_t)curPos, streamLimit);
+            memcpy(curPos, reinterpret_cast<char*>(&dataOffset), sizeof(uint64_t));
+            memcpy(curPos + sizeof(uint64_t), reinterpret_cast<char*>(&streamLimit), sizeof(uint64_t));
+
+            memcpy(buffer, reinterpret_cast<char*>(&count), sizeof(ObjSize));
+            memcpy(buffer + sizeof(ObjSize), reinterpret_cast<char*>(&arrayOffset), sizeof(ObjSize));
+            data->seekg(streamLimit);
+        }
+        else if (count == COUNT_MORE) {
+          // dynamic sized array and we don't know the size yet so we have to index it right away
+          std::shared_ptr<TypeSpec> itemType(getRegistry()->getById(prop.typeId));
+          std::function<bool(uint8_t*)> repeatCondition = [&](uint8_t* pos) -> bool {
+            LOG_F("testing repeat condition at {} - type {}", (uint64_t)pos, itemType->getName());
+            int64_t objIndex = *reinterpret_cast<int64_t*>(pos);
+            DynObject tmp(itemType, streams, indexTable, reinterpret_cast<ObjectIndex*>(objIndex * -1), obj);
+
+            return prop.repeatCondition(tmp);
+          };
+
+          indexEOSArray(prop, indexTable, buffer, obj, dataStream, data, streamLimit, repeatCondition);
+        }
+        else {
+            // In the case of a static length array we can allocate the target array right away
+            // and write directly to that
+            ObjSize arrayOffset = indexTable->allocateArray(count * indexSize(prop.typeId));
+            memcpy(buffer, reinterpret_cast<char*>(&count), sizeof(ObjSize));
+            memcpy(buffer + sizeof(ObjSize), reinterpret_cast<char*>(&arrayOffset), sizeof(ObjSize));
+
+            uint8_t* curPos = indexTable->arrayAddress(arrayOffset);
+
+            for (int j = 0; j < count; ++j) {
+                LOG_F("index array item {}/{}", j, count);
+                curPos = prop.index(curPos, obj, dataStream, data, streamLimit);
+            }
+        }
+        return buffer + sizeof(ObjSize) * 2;
+    }
+    else {
+        // no list, index single item
+        LOG_F("index prop {} (type {}) at {}/{}", prop.key, m_Registry->getById(prop.typeId)->getName(), data->tellg(), data->size());
+        return prop.index(buffer, obj, dataStream, data, streamLimit);
+    }
 }
 
 void TypeSpec::writeIndex(ObjectIndexTable *indexTable, ObjectIndex *objIndex, std::shared_ptr<IOWrapper> data, const StreamRegistry &streams, DynObject *obj, std::streampos streamLimit) {
@@ -107,8 +186,12 @@ void TypeSpec::writeIndex(ObjectIndexTable *indexTable, ObjectIndex *objIndex, s
       objIndex->bitmask[i / 8] |= 1 << (i % 8);
     }
 
+    if (prop.isConditional) {
+      LOG_F("conditional prop {} present: {}", prop.typeId, isPresent);
+    }
+
     if (isPresent) {
-      propertiesEnd = readPropToBuffer(prop, indexTable, propertiesEnd, obj, dataStream, data, streamLimit);
+      propertiesEnd = readPropToBuffer(prop, indexTable, propertiesEnd, obj, streams, dataStream, data, streamLimit);
     }
     DataOffset dataNow = data->tellg();
     if (dataNow > dataMax) {
@@ -131,7 +214,7 @@ std::vector<TypeProperty>::const_iterator TypeSpec::paramByKey(ObjectIndex* objI
     }
     return m_Params.begin() + off;
   }
-  catch (const std::exception &err) {
+  catch (const std::exception&) {
     return m_Params.cend();
   }
 }
@@ -170,10 +253,9 @@ std::tuple<uint32_t, int, int> TypeSpec::getPorP(ObjectIndex* objIndex, const ch
 
   { // param?
     auto iter = paramByKey(objIndex, key, &propertyOffset);
-    LOG_F("param by key {} - {}", key, iter != m_Params.cend());
 
     if (iter != m_Params.cend()) {
-      return std::tuple<uint32_t, size_t, size_t>(iter->typeId, -1, propertyOffset);
+      return std::tuple<uint32_t, int, int>(iter->typeId, -1, propertyOffset);
     }
   }
 
@@ -185,11 +267,13 @@ std::tuple<uint32_t, int, int> TypeSpec::getPorP(ObjectIndex* objIndex, const ch
         throw std::runtime_error(fmt::format("Property not set: {0}", key));
       }
 
-      return std::tuple<uint32_t, size_t, size_t>(iter->typeId, propertyOffset, -1);
+      return std::tuple<uint32_t, int, int>(iter->typeId, propertyOffset, -1);
     }
   }
 
-  throw std::runtime_error(fmt::format("Property not found: {0}", key));
+  LOG_F("no param or property {} found in type {}", key, m_Name);
+
+  throw std::runtime_error(fmt::format("Property not found (1): {0}", key));
 }
 
 std::tuple<uint32_t, size_t> TypeSpec::get(ObjectIndex * objIndex, const char *key) const {
@@ -210,6 +294,8 @@ std::tuple<uint32_t, size_t> TypeSpec::get(ObjectIndex * objIndex, const char *k
       return std::tuple<uint32_t, size_t>(iter->typeId, propertyOffset);
     }
   }
+
+  LOG_F("no param or property {} found in type {}", key, m_Name);
 
   throw std::runtime_error(fmt::format("Property not found: {0}", key));
 }
@@ -232,6 +318,8 @@ std::tuple<uint32_t, size_t, std::vector<std::string>, bool> TypeSpec::getWithAr
       return std::tuple<uint32_t, size_t, std::vector<std::string>, bool>(iter->typeId, propertyOffset, iter->argList, iter->isList);
     }
   }
+
+  LOG_F("no param or property {} found in type {}", key, m_Name);
 
   throw std::runtime_error(fmt::format("Property not found: {0}", key));
 }
@@ -259,7 +347,7 @@ uint8_t *TypeSpec::indexCustom(const TypeProperty &prop, uint32_t typeId,
                                DataStreamId dataStream, std::shared_ptr<IOWrapper> data, std::streampos streamLimit) {
   std::shared_ptr<TypeSpec> spec = m_Registry->getById(typeId);
   int staticSize = spec->getStaticSize();
-  LOG_BRACKET_F("index custom spec {} - {}", spec->getName(), typeId);
+  LOG_BRACKET_F("index custom spec {} - {} (size {})", spec->getName(), typeId, staticSize);
   std::streampos dataPos = data->tellg();
 
   int64_t x = static_cast<int64_t>(streamLimit);
@@ -454,6 +542,13 @@ TypePropertyBuilder &TypePropertyBuilder::withRepeatToEOS() {
 
 TypePropertyBuilder &TypePropertyBuilder::withCount(SizeFunc func) {
   m_Wrappee->count = func;
+  m_Wrappee->isList = true;
+  return *this;
+}
+
+TypePropertyBuilder &TypePropertyBuilder::withRepeatCondition(ConditionFunc func) {
+  m_Wrappee->count = moreCount;
+  m_Wrappee->repeatCondition = func;
   m_Wrappee->isList = true;
   return *this;
 }

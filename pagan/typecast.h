@@ -7,7 +7,7 @@
 #include <stdexcept>
 #include <memory>
 
-static const uint64_t OFFSET_MASK = (0x01LLU << 63) - 1;
+static const uint64_t OFFSET_MASK = 0x7FFFFFFFFFFFFFFFull;
 static const uint64_t WRITTEN_BIT = 0x01LLU << 63;
 
 class IncompatibleType : public std::runtime_error {

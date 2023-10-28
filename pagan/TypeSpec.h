@@ -25,6 +25,8 @@
 // on the heap
 static const int NUM_STATIC_PROPERTIES = 64;
 
+class DynObject;
+
 /*
 struct TypeProperty {
   std::string key;
@@ -55,6 +57,10 @@ static SizeFunc eosCount = [] (const IScriptQuery &object) -> ObjSize {
   return COUNT_EOS;
 };
 
+static SizeFunc moreCount = [] (const IScriptQuery &object) -> ObjSize {
+  return COUNT_MORE;
+};
+
 static ConditionFunc trueFunc = [](const IScriptQuery &object) -> bool {
   return true;
 };
@@ -78,6 +84,7 @@ public:
   TypePropertyBuilder &withEnum(const std::string &enumName);
   TypePropertyBuilder &withRepeatToEOS();
   TypePropertyBuilder &withCount(SizeFunc func);
+  TypePropertyBuilder &withRepeatCondition(ConditionFunc func);
   TypePropertyBuilder &withTypeSwitch(SwitchFunc func, const std::map<std::variant<std::string, int32_t>, uint32_t> &cases);
   TypePropertyBuilder &onAssign(AssignCB func);
   TypePropertyBuilder &withProcessing(const std::string &algorithm);
@@ -129,14 +136,14 @@ public:
   }
 
   void appendParameter(const char* key, uint32_t type) {
-    m_ParamIdx[key] = m_Params.size();
-    m_Params.push_back({ key, type, nullSize, nullSize, validFunc, trueFunc, nop, false, false, false, false });
+    m_ParamIdx[key] = static_cast<int>(m_Params.size());
+    m_Params.push_back({ key, type, nullSize, nullSize, trueFunc, validFunc, trueFunc, nop, false, false, false, false });
   }
 
   TypePropertyBuilder appendProperty(const char *key, uint32_t type) {
     LOG_F("append prop to {0} - {1} size index {2}, size data {3}", m_Id, key, m_IndexSize, m_StaticSize);
-    m_SequenceIdx[key] = m_Sequence.size();
-    m_Sequence.push_back({ key, type, nullSize, nullSize, validFunc, trueFunc, nop, false, false, false, false });
+    m_SequenceIdx[key] = static_cast<int>(m_Sequence.size());
+    m_Sequence.push_back({ key, type, nullSize, nullSize, trueFunc, validFunc, trueFunc, nop, false, false, false, false });
     TypeProperty *prop = &*m_Sequence.rbegin();
     return TypePropertyBuilder(prop, [this, type, prop]() {
       m_IndexSize += prop->isList ? (sizeof(ObjSize) * 2) : indexSize(type);
@@ -173,7 +180,8 @@ public:
                         const DynObject *obj,
                         DataStreamId dataStream,
                         std::shared_ptr<IOWrapper> data,
-    std::streampos streamLimit);
+                        std::streampos streamLimit,
+                        std::function<bool(uint8_t*)> repeatCondition);
 
   /**
     * index the specified property for this object to the buffer.
@@ -184,56 +192,10 @@ public:
                             ObjectIndexTable *indexTable,
                             uint8_t *buffer,
                             DynObject *obj,
+                            const StreamRegistry &streams,
                             DataStreamId dataStream,
                             std::shared_ptr<IOWrapper> data,
-                            std::streampos streamLimit) {
-    if (prop.processing != "") {
-      throw std::runtime_error("processing not supported");
-    }
-    // LOG_F("read prop to buffer {} type {} (list: {})", prop.key, prop.typeId, prop.isList);
-    if (prop.isList) {
-      ObjSize count = prop.count(*obj);
-
-      LOG_BRACKET("indexing array");
-
-      if (count == COUNT_EOS) {
-        // unknown number of items but we know the total size of items.
-        // we use the array index to store start and size in the data stream, so that it can later be
-        // lazy loaded easily
-        uint64_t dataOffset = data->tellg();
-        ObjSize arrayOffset = indexTable->allocateArray(16);
-        uint8_t* curPos = indexTable->arrayAddress(arrayOffset);
-        LOG_F("allocate eos array data {}, arrayidx {}, arrayref {}, eos {}", dataOffset, arrayOffset, (uint64_t)curPos, streamLimit);
-        memcpy(curPos, reinterpret_cast<char*>(&dataOffset), sizeof(uint64_t));
-        memcpy(curPos + sizeof(uint64_t), reinterpret_cast<char*>(&streamLimit), sizeof(uint64_t));
-
-        memcpy(buffer, reinterpret_cast<char*>(&count), sizeof(ObjSize));
-        memcpy(buffer + sizeof(ObjSize), reinterpret_cast<char*>(&arrayOffset), sizeof(ObjSize));
-        data->seekg(streamLimit);
-      }
-      else {
-        // In the case of a static length array we can allocate the target array right away
-        // and write directly to that
-        ObjSize arrayOffset = indexTable->allocateArray(count * indexSize(prop.typeId));
-        memcpy(buffer, reinterpret_cast<char*>(&count), sizeof(ObjSize));
-        memcpy(buffer + sizeof(ObjSize), reinterpret_cast<char*>(&arrayOffset), sizeof(ObjSize));
-
-        uint8_t *curPos = indexTable->arrayAddress(arrayOffset);
-
-        LOG_F("index array of items {}", count);
-        for (int j = 0; j < count; ++j) {
-          LOG_F("index array item {}/{}", j, count);
-          curPos = prop.index(curPos, obj, dataStream, data, streamLimit);
-        }
-      }
-      return buffer + sizeof(ObjSize) * 2;
-    }
-    else {
-      // no list, index single item
-      LOG_F("index prop {} (type {}) at {}/{}", prop.key, m_Registry->getById(prop.typeId)->getName(), data->tellg(), data->size());
-      return prop.index(buffer, obj, dataStream, data, streamLimit);
-    }
-  }
+                            std::streampos streamLimit);
 
   void writeIndex(ObjectIndexTable *index, ObjectIndex *objIndex, std::shared_ptr<IOWrapper> data, const StreamRegistry &streams, DynObject *obj, std::streampos streamLimit);
 

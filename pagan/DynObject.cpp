@@ -1,5 +1,6 @@
 #include "DynObject.h"
 #include "TypeSpec.h"
+#include <numeric>
 
 void DynObject::saveTo(std::shared_ptr<IOWrapper> file) {
   LOG_BRACKET_F("save object idx {0} to {1}", (uint64_t)m_ObjectIndex, file->tellp());
@@ -62,8 +63,17 @@ void DynObject::saveTo(std::shared_ptr<IOWrapper> file) {
 
         LOG_F("parse array {0} -> {1}", arrayDataPos, streamLimit);
 
+        std::function<bool(uint8_t*)> repeatCondition;
+        if (arrayProp.count == COUNT_MORE) {
+          repeatCondition = [&](uint8_t* pos) -> bool {
+            LOG_F("repeat condition {0}, ({1})", m_Spec->getId(), m_Spec->getProperties().size());
+            DynObject tmp(m_Spec, m_Streams, m_IndexTable, reinterpret_cast<ObjectIndex*>(pos), this);
+            return prop.repeatCondition(tmp);
+          };
+        }
+
         m_Spec->indexEOSArray(prop, m_IndexTable, m_ObjectIndex->properties + offset,
-                              this, m_ObjectIndex->dataStream, data, streamLimit);
+                              this, m_ObjectIndex->dataStream, data, streamLimit, repeatCondition);
         buff = *reinterpret_cast<uint64_t*>(m_ObjectIndex->properties + offset);
         arrayData = m_IndexTable->arrayAddress(arrayProp.offset);
         LOG_F("#items: {0}", arrayProp.count);
@@ -191,7 +201,7 @@ std::vector<std::string> DynObject::getKeys() const {
     }
   }
 
-  return std::move(res);
+  return res;
 }
 
 bool DynObject::has(const char* key) const {
@@ -303,7 +313,7 @@ std::any DynObject::getAny(const std::vector<std::string>::const_iterator &cur, 
 
   std::tie(typeId, offsetProp, offsetParam) = m_Spec->getPorP(m_ObjectIndex, cur->c_str());
 
-  LOG_F("getAny {} - {} - {}", *cur, offsetParam, offsetProp);
+  LOG_F("getAny({}) found: param {} - prop {}", *cur, offsetParam, offsetProp);
 
   if (offsetProp != -1) {
     uint8_t* propBuffer = m_ObjectIndex->properties + offsetProp;
@@ -424,11 +434,20 @@ const TypeProperty& DynObject::getProperty(const char* key) const {
 }
 
 DynObject DynObject::getObject(const char* key) const {
-  if (strcmp(key, "_parent") == 0) {
+  if (strcmp(key, "_") == 0) {
+    return *this;
+  } else if (strcmp(key, "_parent") == 0) {
     if (m_Parent == nullptr) {
       throw std::runtime_error("parent pointer not set");
     }
     return *m_Parent;
+  }
+  else if (strcmp(key, "_root") == 0) {
+    const DynObject* iter = this;
+    while (iter->m_Parent != nullptr) {
+      iter = iter->m_Parent;
+    }
+    return *iter;
   }
 
   uint8_t* propBuffer;
@@ -512,8 +531,8 @@ std::tuple<uint8_t*, ObjSize, uint32_t> DynObject::accessArrayIndex(const char* 
   buff = *reinterpret_cast<uint64_t*>(m_ObjectIndex->properties + offset);
   uint8_t* arrayData = m_IndexTable->arrayAddress(arrayProp.offset);
 
-  if (arrayProp.count == COUNT_EOS) {
-    // eos array hasn't been loaded yet
+  if ((arrayProp.count == COUNT_EOS) || (arrayProp.count == COUNT_MORE)) {
+    // with a dynamic length array we have to to index the objects to know the length of the array
     const TypeProperty& prop = getProperty(key);
     std::shared_ptr<IOWrapper> data = getDataStream();
     uint64_t arrayDataPos;
@@ -521,9 +540,30 @@ std::tuple<uint8_t*, ObjSize, uint32_t> DynObject::accessArrayIndex(const char* 
     memcpy(reinterpret_cast<char*>(&arrayDataPos), arrayData, sizeof(uint64_t));
     memcpy(reinterpret_cast<char*>(&streamLimit), arrayData + sizeof(uint64_t), sizeof(uint64_t));
     data->seekg(arrayDataPos);
-    m_Spec->indexEOSArray(prop, m_IndexTable, m_ObjectIndex->properties + offset,
-                          this, m_ObjectIndex->dataStream, data, streamLimit);
+    std::function<bool(uint8_t*)> repeatCondition;
+    if (arrayProp.count == COUNT_MORE) {
+      std::shared_ptr<TypeSpec> itemType(m_Spec->getRegistry()->getById(prop.typeId));
+      LOG_F("repeat-until getList");
+      repeatCondition = [&](uint8_t* pos) -> bool {
+        // we need the DynObject to correctly evaluate the loop condition but at this point, the object index is only stored in a temporary
+        // location, identified by pos
+        // TODO: probably need handling for runtime types
+        int64_t objIndex = *reinterpret_cast<int64_t*>(pos);
+        DynObject tmp(itemType, m_Streams, m_IndexTable, reinterpret_cast<ObjectIndex*>(objIndex * -1), this);
 
+        auto keys = tmp.getKeys();
+        std::string joined = std::accumulate(keys.begin(), keys.end(), std::string(), [](std::string res, const std::string& iter) {
+          return std::move(res) + "," + iter;
+          });
+
+        return prop.repeatCondition(tmp);
+      };
+    }
+
+    m_Spec->indexEOSArray(prop, m_IndexTable, m_ObjectIndex->properties + offset,
+                          this, m_ObjectIndex->dataStream, data, streamLimit, repeatCondition);
+
+    // update the array properties, now with the actual count filled in
     buff = *reinterpret_cast<uint64_t*>(m_ObjectIndex->properties + offset);
     arrayData = m_IndexTable->arrayAddress(arrayProp.offset);
   }
@@ -533,6 +573,23 @@ std::tuple<uint8_t*, ObjSize, uint32_t> DynObject::accessArrayIndex(const char* 
   LOG_F("array count 2 {} - {}", arrayProp.count, typeId);
 
   return std::make_tuple(arrayCur, arrayProp.count, typeId);
+}
+
+DynObject DynObject::getArrayItem(uint32_t typeId, uint8_t **arrayCur) const {
+  uint32_t itemType = typeId;
+  // in a "regular" array the item type will always be the same but if it's
+  // a runtime type (switch/case) each item may be a different type and the actual
+  // object is prefixed by it's real type
+  if (itemType == TypeId::runtime) {
+    itemType = *reinterpret_cast<uint32_t*>(*arrayCur);
+    *arrayCur += sizeof(uint32_t);
+  }
+  int64_t objOffset = *reinterpret_cast<int64_t*>(*arrayCur);
+
+  std::shared_ptr<TypeSpec> type(m_Spec->getRegistry()->getById(itemType));
+
+  *arrayCur += sizeof(int64_t);
+  return getObjectAtOffset(type, objOffset, *arrayCur);
 }
 
 std::vector<std::any> DynObject::getListOfAny(const char* key) const {

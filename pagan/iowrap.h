@@ -77,10 +77,6 @@ public:
   }
 
   void read(char *target, std::streamsize count) {
-    static int numReads = 0;
-    static int numCalls = 0;
-
-    ++numCalls;
     if (m_BufferSize == -1) {
       // unbuffered reading
       commitSeekG();
@@ -91,6 +87,8 @@ public:
     }
 
     // buffered reading
+
+    // if no buffer yet or requested position outside range
     if ((m_BufferPos == -1)
         || (m_PosG < m_BufferPos)
         || ((m_PosG + count) > (m_BufferPos + m_BufferSize))) {
@@ -103,14 +101,13 @@ public:
       // we fill the entire buffer, the range actually requested will be in the middle of the buffer so that we
       // can also fulfill future requests before and after the requested range
       int64_t padding = m_BufferSize - count;
-      m_BufferPos = std::max(0LL, m_PosG - (padding / 2));
+      m_BufferPos = std::max<int64_t>(0LL, m_PosG - (padding / 2));
       if ((m_Size != -1) && (m_BufferPos + m_BufferSize > m_Size)) {
         // don't buffer beyond the file
         m_BufferSize = static_cast<int32_t>(m_Size - m_BufferPos);
       }
       m_Stream->seekg(m_BufferPos);
       try {
-        ++numReads;
         m_Stream->read(m_Buffer, m_BufferSize);
       }
       catch (const std::ios::failure&) {
@@ -129,9 +126,14 @@ public:
   }
 
   int get() {
+    char res;
+    read(&res, 1);
+    return res;
+    /* in unbuffered mode, the following would be cheaper, in buffered mode this confuses the get offsets
     commitSeekG();
     m_PosG += 1;
     return m_Stream->get();
+    */
   }
 
 private:
@@ -140,7 +142,6 @@ private:
 
   void commitSeekG() {
     if (m_SeekGPending) {
-      ++m_SeekCount;
       m_Stream->seekg(m_PosG, std::ios::beg);
       m_SeekGPending = false;
     }
@@ -156,7 +157,6 @@ private:
 private:
 
   std::iostream *m_Stream;
-  int32_t m_SeekCount{ 0 };
   int64_t m_Size;
   std::streamoff m_PosG { 0 };
   std::streamoff m_PosP { 0 };

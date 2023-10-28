@@ -12,6 +12,7 @@ struct TypeProperty {
   uint32_t typeId;
   SizeFunc size;
   SizeFunc count;
+  ConditionFunc repeatCondition;
   ValidationFunc validation;
   ConditionFunc condition;
   AssignCB onAssign;
