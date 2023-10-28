@@ -271,6 +271,9 @@ void addProperties(Parser &parser, NamedTypes &types, std::shared_ptr<TypeSpec> 
       else if (repeatType == "expr") {
         prop.withCount(makeFunc<int32_t>(entry["repeat-expr"].as<std::string>()));
       }
+      else if (repeatType == "until") {
+        prop.withRepeatCondition(makeFunc<bool>(entry["repeat-until"].as<std::string>()));
+      }
       else {
         throw std::runtime_error("unsupported repeat function");
       }

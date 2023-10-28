@@ -1,5 +1,7 @@
 #pragma once
 
+#include <string>
+
 class IScriptQuery {
 public:
   virtual std::any getAny(char *key) const = 0;

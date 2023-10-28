@@ -55,7 +55,7 @@ void ObjectIndexTable::setProperties(ObjectIndex *obj, uint8_t *buffer, size_t s
 
 ObjSize ObjectIndexTable::allocateArray(uint32_t size) {
   if (size > ARRAY_CHUNK_SIZE) {
-    throw std::runtime_error("array too long");
+    throw std::runtime_error(fmt::format("array too long: {} > {}", size, ARRAY_CHUNK_SIZE));
   }
   if (ARRAY_CHUNK_SIZE - m_NextFreeArrayIndex < size) {
     addArrayBuffer();
