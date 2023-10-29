@@ -68,7 +68,7 @@ The representation of each property depends on the type:
 
 A fully indexed array will contain the evaluated item count and the offset into the array index.
 
-It may also contain -2 for the count, the constant for COUNT_EOS. This means the array hasn't been indexed yet and goes to the end of the fixed size parent or end of the data stream . The offset still references the array index where we store 2x64 bit values, the index into the data stream and the length to the end of the stream/parent.
+It may also contain -2 for the count, the constant for COUNT_EOS (End Of Stream). This means the array hasn't been indexed yet and goes to the end of the fixed size parent or end of the data stream. The offset still references the array index where we store 2x64 bit values, the index into the data stream and the length to the end of the stream/parent.
 
 #### "runtime" type
 

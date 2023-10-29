@@ -8,7 +8,7 @@ Format specifications are interpreted at runtime to produce a parser, meaning th
 
 Prototype state
 
-My intended use case for this project has mostly disappeared so I now work on this very unfrequently.
+My intended use-case for this project has mostly disappeared so I now work on this very unfrequently.
 
 ## Language support
 
@@ -23,10 +23,10 @@ Pagan is an independent project to Kaitai Struct, supporting (a subset of) the s
 
 ### Implementation
 
-The main difference is that Kaitai Struct generates source code in various languages to be included in your project directly. Pagan creates the compiler at runtime.
+The main difference is that Kaitai Struct generates source code in various languages to be included in your project directly. Pagan is a native library that creates the compiler at runtime.
 The main advantage is that users don't need to set up a compiler environment to develop and test formats.
 
-Also, adding support for different programming languages should be easier since only bindinggs for the library frontend need to be developed rather than a compiler and support library. This should also make it easier to maintain feature parity.
+Also, adding support for different programming languages should be easier since only bindinggs for the library frontend need to be developed rather than a compiler and support library. This should also make it easier to maintain feature parity (e.g. compression/encryption libraries don't need to be available in each language individually)
 
 The drawback is performance and convenience though. There is less opportunity for optimization and since everything is dynamic, there is no code completion in the IDE, and no static type checking.
 
@@ -35,3 +35,16 @@ The drawback is performance and convenience though. There is less opportunity fo
 - Pagan currently only supports a subset of the declaration and thus only a small number of formats
 - Pagan has limited edit support. The syntax extension for this will probably not be compatible with the write support planned for Kaitai, if it ever comes
 - Pagan currently only supports parsing files, not streams
+
+## ToDos
+
+- The C++ part requires proper dependency management (conan)
+- The PEGTL library we use to parse expressions (conditions, object size calculations) is outdated, to update would require quite a bit of code rewrite
+- In general the way PEGTL is used is probably quite inefficient and evaluating expressions is easily the most expensive part of the parsing process.
+  PEGTL is quite generic, a more tailor-made solution might be simpler and more efficient at the same time
+- More tests are required. An automated way to test pagan parsing results against those of kaitai to ensure compatibility might be more useful than unit tests
+  It would also be prudent to have a look at the kaitai test repo (https://github.com/kaitai-io/kaitai_struct_tests)
+- Potentially in the course of testing, benchmark comparisons could be introduced
+- main.cpp contains a list of technical todos (memory management), index_format.md contains todos regarding the inefficiencies and inconsistencies of the index format
+- introduce code quality verification and auto formatting (clang_tidy, clang_format)
+- Linux/MacOS builds?

@@ -6,7 +6,8 @@
   "scripts": {
     "configure": "cmake-js configure",
     "install": "cmake-js compile",
-    "build_test": "cmake-js compile -T tests",
+    "build": "cmake-js compile --config Release",
+    "build_test": "cmake-js compile --config Release -T tests",
     "test": "yarn run build_test && ./build/Release/tests.exe"
   },
   "dependencies": {

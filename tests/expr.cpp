@@ -123,7 +123,9 @@ TEST_CASE("language features", "[expr]") {
 
   // boolean
   REQUIRE(makeFunc<bool>("1 || 0")(query) == true);
+  REQUIRE(makeFunc<bool>("1 or 0")(query) == true);
   REQUIRE(makeFunc<bool>("1 && 0")(query) == false);
+  REQUIRE(makeFunc<bool>("1 and 0")(query) == false);
 
   REQUIRE(makeFunc<bool>("!(2 == 4)")(query) == true);
   REQUIRE(makeFunc<bool>("!(x == 2)")(query) == false);

@@ -10,5 +10,8 @@ binpargen4 _mostly_working_with_index_streams
 node_modules
 node-pagan/build
 node-pagan/manual_build
+node-pagan/.yarn
 *.vcxproj.filters  
 *.vcxproj.user  
+
+extern

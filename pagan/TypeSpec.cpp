@@ -255,7 +255,8 @@ std::tuple<uint32_t, int, int> TypeSpec::getPorP(ObjectIndex* objIndex, const ch
     auto iter = paramByKey(objIndex, key, &propertyOffset);
 
     if (iter != m_Params.cend()) {
-      return std::tuple<uint32_t, int, int>(iter->typeId, -1, propertyOffset);
+      // return std::tuple<uint32_t, int, int>{ iter->typeId, -1, propertyOffset };
+      return { iter->typeId, -1, propertyOffset };
     }
   }
 
@@ -267,7 +268,7 @@ std::tuple<uint32_t, int, int> TypeSpec::getPorP(ObjectIndex* objIndex, const ch
         throw std::runtime_error(fmt::format("Property not set: {0}", key));
       }
 
-      return std::tuple<uint32_t, int, int>(iter->typeId, propertyOffset, -1);
+      return std::tuple<uint32_t, int, int>{ iter->typeId, propertyOffset, -1 };
     }
   }
 

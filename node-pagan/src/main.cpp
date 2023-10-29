@@ -3,9 +3,7 @@
  *  - memory leak in dumpIndex
  *  - performance? profiler doesn't work atm
  *  - support for nested data streams
- *  - support for further kaitai features
  *  - more complex write cases
- *  - better unit tests coverage, way to measure coverage
  *  - is the getObject call in its current form even necessary?
  *  - setList isn't implemented
  *  - further todos, see index_format.md

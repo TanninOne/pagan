@@ -266,8 +266,8 @@ namespace ExpressionSpec {
       std::string t;
       size_t size = in.size();
       size_t offset = 0;
-      // no operator is more than 2 characters long
-      while ((offset < size) && (offset < 2)) {
+      // no operator is more than 3 characters long (and being the only 3-character operator)
+      while ((offset < size) && (offset < 3)) {
         char ch = in.peek_char(offset);
         ++offset;
         if (ch == ' ') {
@@ -436,7 +436,9 @@ static std::map<std::string, std::function<std::any(const std::any&, const std::
   { "^", [](const std::any &lhs, const std::any &rhs) { return flexi_cast<int64_t>(lhs) ^ flexi_cast<int64_t>(rhs); }},
   { "|", [](const std::any &lhs, const std::any &rhs) { return flexi_cast<int64_t>(lhs) | flexi_cast<int64_t>(rhs); }},
   { "&&", [](const std::any &lhs, const std::any &rhs) { return flexi_cast<bool>(lhs) && flexi_cast<bool>(rhs); }},
+  { "and", [](const std::any &lhs, const std::any &rhs) { return flexi_cast<bool>(lhs) && flexi_cast<bool>(rhs); }},
   { "||", [](const std::any &lhs, const std::any &rhs) { return flexi_cast<bool>(lhs) || flexi_cast<bool>(rhs); }},
+  { "or", [](const std::any &lhs, const std::any &rhs) { return flexi_cast<bool>(lhs) || flexi_cast<bool>(rhs); }},
   { "?", [](const std::any& lhs, const std::any& rhs) -> std::any { throw std::runtime_error("ternary operation should be handled directly"); }},
   { ":", [](const std::any& lhs, const std::any& rhs) -> std::any { throw std::runtime_error("ternary operation should be handled directly"); }},
 };
