@@ -235,7 +235,7 @@ public:
 
   std::tuple<uint32_t, size_t, SizeFunc, AssignCB> getFull(ObjectIndex *objIndex, const char *key) const;
 
-  std::vector<TypeProperty>::const_iterator paramByKey(ObjectIndex* objIndex, const char* key, int* offset) const;
+  std::vector<TypeProperty>::const_iterator paramByKey(const char* key, int* offset) const;
   std::vector<TypeProperty>::const_iterator propertyByKey(ObjectIndex *objIndex, const char *key, int *offset = nullptr) const;
 
   uint32_t getId() const {
@@ -336,6 +336,9 @@ private:
                      ObjectIndexTable *index)
                      -> IndexFunc;
 
+  std::function<std::tuple<uint32_t, int, int>(ObjectIndex*)> getPorPImpl(const char* key) const;
+  std::function<std::vector<TypeProperty>::const_iterator(ObjectIndex*)> propertyByKeyFunc(const char* key, int* offset) const;
+
 private:
 
   std::string m_Name;
@@ -346,6 +349,7 @@ private:
   std::map<std::string, int> m_SequenceIdx;
   std::map<std::string, ComputeFunc> m_Computed;
   std::map<std::string, KSYEnum> m_Enums;
+  mutable std::unordered_map<std::string, std::function<std::tuple<uint32_t, int, int>(ObjectIndex*)>> m_PoPCache;
   uint16_t m_IndexSize{0};
   uint32_t m_Id;
   int32_t m_StaticSize;

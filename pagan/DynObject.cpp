@@ -333,14 +333,15 @@ std::any DynObject::getAny(const std::vector<std::string>::const_iterator &cur, 
     std::shared_ptr<IOWrapper> writeStream = m_Streams.getWrite();
 
     std::any result = type_read_any(static_cast<TypeId>(typeId), index, dataStream, writeStream);
+    LOG_F("getAny({}) type: {}", *cur, result.type().name());
 
-    TypeProperty prop = m_Spec->getProperty(cur->c_str());
+    const TypeProperty &prop = m_Spec->getProperty(cur->c_str());
 
     if (prop.hasEnum) {
       return resolveEnum(prop.enumName, flexi_cast<int32_t>(result));
     }
 
-    return result;
+    return std::move(result);
   }
   else if (offsetParam != -1) {
     return m_Parameters.at(offsetParam);

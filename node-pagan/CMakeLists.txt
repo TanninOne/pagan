@@ -39,8 +39,8 @@ string(REGEX REPLACE "[\r\n\"]" "" NODE_ADDON_API_DIR ${NODE_ADDON_API_DIR})
 
 target_include_directories(${PROJECT_NAME} PRIVATE ${NODE_ADDON_API_DIR} ${EXTERN}/PEGTL/include ${EXTERN}/yaml-cpp/include ${EXTERN}/StackWalker/Main/StackWalker)
 
-# add_definitions(-DNAPI_VERSION=3 -DNOLOG)
-add_definitions(-DNAPI_VERSION=3)
+add_definitions(-DNAPI_VERSION=3 -DNOLOG)
+# add_definitions(-DNAPI_VERSION=3)
 
 Include(FetchContent)
 

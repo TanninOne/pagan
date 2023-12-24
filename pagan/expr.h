@@ -69,6 +69,7 @@ static inline bool any_equal(const std::any &lhs, const std::any &rhs) {
     return comparators.at(lhs.type())(lhs, rhs);
   }
   catch (const std::out_of_range &) {
+    LOG_F("trying to compare {}", lhs.type().name());
     return false;
   }
   catch (const std::bad_any_cast &) {
@@ -208,7 +209,7 @@ namespace ExpressionSpec {
       insert(">", Order(8), [](const std::any &lhs, const std::any &rhs) { return flexi_cast<int64_t>(lhs) > flexi_cast<int64_t>(rhs); });
       insert("<=", Order(8), [](const std::any &lhs, const std::any &rhs) { return flexi_cast<int64_t>(lhs) <= flexi_cast<int64_t>(rhs); });
       insert(">=", Order(8), [](const std::any &lhs, const std::any &rhs) { return flexi_cast<int64_t>(lhs) >= flexi_cast<int64_t>(rhs); });
-      insert("==", Order(9), [](const std::any &lhs, const std::any &rhs) {return any_equal(lhs, rhs); });
+      insert("==", Order(9), [](const std::any &lhs, const std::any &rhs) { return any_equal(lhs, rhs); });
       insert("!=", Order(9), [](const std::any &lhs, const std::any &rhs) { return !any_equal(lhs, rhs); });
       insert("&", Order(10), [](const std::any &lhs, const std::any &rhs) { return flexi_cast<int64_t>(lhs) & flexi_cast<int64_t>(rhs); });
       insert("^", Order(11), [](const std::any &lhs, const std::any &rhs) { return flexi_cast<int64_t>(lhs) ^ flexi_cast<int64_t>(rhs); });

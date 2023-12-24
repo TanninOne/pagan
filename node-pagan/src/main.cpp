@@ -1,7 +1,8 @@
 /* TODO:
+ *  - evaluation order in expressions is wrong but not consistently? What's going on?
  *  - const_cast in DynObject and iowrap
  *  - memory leak in dumpIndex
- *  - performance? profiler doesn't work atm
+ *  - a more tailor-made expression parser may be the biggest performance win
  *  - support for nested data streams
  *  - more complex write cases
  *  - is the getObject call in its current form even necessary?

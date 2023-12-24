@@ -183,7 +183,7 @@ template <typename T> char *type_index_num(char *index, std::shared_ptr<IOWrappe
     T x = *reinterpret_cast<T*>(index);
     LOG_F("indexed num {} at {}", *reinterpret_cast<T*>(index), data->tellg() - sizeof(T), x);
     if (!debug.empty()) {
-      std::cout << debug << ": " << x << "\n";
+      LOG_F("{}: {}", debug, static_cast<int>(x));
     }
     return index + sizeof(T);
   }
