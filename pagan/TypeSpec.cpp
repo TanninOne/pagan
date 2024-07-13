@@ -1,6 +1,7 @@
 #include "TypeSpec.h"
 #include "DynObject.h"
 #include <numeric>
+#include "cpptrace/cpptrace.hpp"
 
 TypeSpec::TypeSpec(const char *name, uint32_t typeId, TypeRegistry *registry)
     : m_Name(name), m_Registry(registry), m_Id(typeId), m_StaticSize(0), m_BaseBuffer()
@@ -234,14 +235,14 @@ void TypeSpec::writeIndex(ObjectIndexTable *indexTable, ObjectIndex *objIndex, s
   indexTable->setProperties(objIndex, buffer, propertiesEnd - buffer);
 }
 
-std::vector<TypeProperty>::const_iterator TypeSpec::paramByKey(const char *key, int *offset) const
+std::vector<TypeProperty>::const_iterator TypeSpec::paramByKey(std::string_view key, int *offset) const
 {
   if (offset != nullptr)
   {
     *offset = 0;
   }
 
-  auto idxIter = m_ParamIdx.find(key);
+  auto idxIter = m_ParamIdx.find(std::string(key));
   if (idxIter == m_ParamIdx.cend()) {
     return m_Params.cend();
   }
@@ -253,7 +254,7 @@ std::vector<TypeProperty>::const_iterator TypeSpec::paramByKey(const char *key, 
   return m_Params.begin() + off;
 }
 
-std::function<std::vector<TypeProperty>::const_iterator(ObjectIndex*)> TypeSpec::propertyByKeyFunc(const char *key, int *offset) const
+std::function<std::vector<TypeProperty>::const_iterator(ObjectIndex*)> TypeSpec::propertyByKeyFunc(std::string_view key, int *offset) const
 {
   if (offset != nullptr)
   {
@@ -292,7 +293,7 @@ std::function<std::vector<TypeProperty>::const_iterator(ObjectIndex*)> TypeSpec:
   };
 }
 
-std::vector<TypeProperty>::const_iterator TypeSpec::propertyByKey(ObjectIndex *objIndex, const char *key, int *offset) const
+std::vector<TypeProperty>::const_iterator TypeSpec::propertyByKey(ObjectIndex *objIndex, std::string_view key, int *offset) const
 {
   if (offset != nullptr)
   {
@@ -318,7 +319,7 @@ std::vector<TypeProperty>::const_iterator TypeSpec::propertyByKey(ObjectIndex *o
     return res; });
 }
 
-std::function<std::tuple<uint32_t, int, int>(ObjectIndex*)> TypeSpec::getPorPImpl(const char* key) const
+std::function<std::tuple<uint32_t, int, int>(ObjectIndex*)> TypeSpec::getPorPImpl(std::string_view key) const
 {
   int propertyOffset = 0;
 
@@ -345,7 +346,7 @@ std::function<std::tuple<uint32_t, int, int>(ObjectIndex*)> TypeSpec::getPorPImp
   }
 }
 
-std::tuple<uint32_t, size_t> TypeSpec::get(ObjectIndex *objIndex, const char *key) const
+std::tuple<uint32_t, size_t> TypeSpec::get(ObjectIndex *objIndex, std::string_view key) const
 {
   int propertyOffset = 0;
 
@@ -369,11 +370,12 @@ std::tuple<uint32_t, size_t> TypeSpec::get(ObjectIndex *objIndex, const char *ke
 
   LOG_F("no param or property {} found in type {}", key, m_Name);
 
-  throw std::runtime_error(fmt::format("Property not found: {0}", key));
+  throw cpptrace::runtime_error(fmt::format("Property not found: {0}", key));
 }
 
-std::tuple<uint32_t, int, int> TypeSpec::getPorP(ObjectIndex *objIndex, const char *key) const
+std::tuple<uint32_t, int, int> TypeSpec::getPorP(ObjectIndex *objIndex, std::string_view key_sv) const
 {
+  std::string key{ key_sv };
   auto iter = m_PoPCache.find(key);
 
   if (iter != m_PoPCache.cend()) {
@@ -386,14 +388,14 @@ std::tuple<uint32_t, int, int> TypeSpec::getPorP(ObjectIndex *objIndex, const ch
   }
   catch (const std::exception& e) {
     m_PoPCache[key] = [key](ObjectIndex*) -> std::tuple<uint32_t, int, int> {
-      throw std::runtime_error(fmt::format("Property not found: {0}", key));
+      throw cpptrace::runtime_error(fmt::format("Property not found: {0}", key));
     };
   }
 
   return m_PoPCache[key](objIndex);
 }
 
-std::tuple<uint32_t, size_t, std::vector<std::string>, bool> TypeSpec::getWithArgs(ObjectIndex *objIndex, const char *key) const
+std::tuple<uint32_t, size_t, std::vector<std::string>, bool> TypeSpec::getWithArgs(ObjectIndex *objIndex, std::string_view key) const
 {
   int propertyOffset = 0;
 
@@ -417,10 +419,10 @@ std::tuple<uint32_t, size_t, std::vector<std::string>, bool> TypeSpec::getWithAr
 
   LOG_F("no param or property {} found in type {}", key, m_Name);
 
-  throw std::runtime_error(fmt::format("Property not found: {0}", key));
+  throw cpptrace::runtime_error(fmt::format("Property not found: {0}", key));
 }
 
-std::tuple<uint32_t, size_t, SizeFunc, AssignCB> TypeSpec::getFull(ObjectIndex *objIndex, const char *key) const
+std::tuple<uint32_t, size_t, SizeFunc, AssignCB> TypeSpec::getFull(ObjectIndex *objIndex, std::string_view key) const
 {
   size_t bitsetBytes = (m_Sequence.size() + 7) / 8;
   size_t offset = sizeof(DataStreamId) + sizeof(DataOffset);

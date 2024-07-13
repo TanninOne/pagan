@@ -87,4 +87,3 @@ template<>
 inline std::any flexi_cast(const std::any& input) {
   return input;
 }
-

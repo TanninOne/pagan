@@ -1,10 +1,6 @@
 #include "util.h"
 #include "iowrap.h"
-#include <algorithm>
 #include <iomanip>
-#ifdef WIN32
-#include <StackWalker.h>
-#endif
 
 thread_local int LogBracket::s_Indent = 0;
 thread_local RingLog LogBracket::s_RingLog;
@@ -74,31 +70,22 @@ std::string LogBracket::indent() {
   return xStr + sStr;
 }
 
-class MyStackWalker : public StackWalker
-{
-public:
-  MyStackWalker() : StackWalker() {}
-protected:
-  virtual void OnOutput(LPCSTR szText) {
-    std::cout << szText;
-    StackWalker::OnOutput(szText);
-  }
-};
-
-
-MyStackWalker sw;
+// class MyStackWalker : public StackWalker
+// {
+// public:
+//   MyStackWalker() : StackWalker() {}
+// protected:
+//   virtual void OnOutput(LPCSTR szText) {
+//     std::cout << szText;
+//     StackWalker::OnOutput(szText);
+//   }
+// };
+// 
+// MyStackWalker sw;
 
 void printExceptionStack() {
-#ifdef WIN32
-    // MyStackWalker sw;
-    sw.ShowCallstack(::GetCurrentThread(), sw.GetCurrentExceptionContext());
-#endif
 }
 
 void printStack() {
-#ifdef WIN32
-    // MyStackWalker sw;
-    sw.ShowCallstack();
-#endif
 }
 

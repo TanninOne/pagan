@@ -5,13 +5,19 @@
   "license": "MIT",
   "scripts": {
     "configure": "cmake-js configure",
-    "install": "cmake-js compile",
-    "build": "cmake-js compile --config Release",
-    "build_test": "cmake-js compile --config Release -T tests",
-    "test": "yarn run build_test && ./build/Release/tests.exe"
+    "install": "conan install . && cmake-js compile",
+    "build": "conan install . --settings=build_type=Release && cmake-js compile --config Release --CDCMAKE_TOOLCHAIN_FILE=\"./generators/conan_toolchain.cmake\"",
+    "build_dbg": "conan install . --settings=build_type=Debug && cmake-js compile --config Debug --CDCMAKE_TOOLCHAIN_FILE=\"./generators/conan_toolchain.cmake\"",
+    "build_test": "cmake-js compile --config Debug -T tests",
+    "test": "yarn run build_test && ./build/Debug/tests.exe"
   },
   "dependencies": {
-    "cmake-js": "^6.1.0",
+    "cmake-js": "^7.3.0",
     "node-addon-api": "*"
+  },
+  "binary": {
+    "napi_versions": [
+      4
+    ]
   }
 }

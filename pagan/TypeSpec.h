@@ -1,14 +1,5 @@
 #pragma once
 
-#include <vector>
-#include <atomic>
-#include <algorithm>
-#include <tuple>
-#include <sstream>
-#include <functional>
-#include <any>
-#include <cassert>
-#include <variant>
 #include "types.h"
 #include "typecast.h"
 #include "typeregistry.h"
@@ -19,6 +10,17 @@
 #include "DynObject.h"
 #include "constants.h"
 #include "typeproperty.h"
+
+#include <vector>
+#include <atomic>
+#include <algorithm>
+#include <tuple>
+#include <sstream>
+#include <functional>
+#include <any>
+#include <cassert>
+#include <variant>
+#include <string_view>
 
 // number of properties where we use a static buffer to buffer
 // the properties. If an object has more properties, we allocate a buffer
@@ -135,9 +137,9 @@ public:
     return m_Params[index];
   }
 
-  void appendParameter(const char* key, uint32_t type) {
-    m_ParamIdx[key] = static_cast<int>(m_Params.size());
-    m_Params.push_back({ key, type, nullSize, nullSize, trueFunc, validFunc, trueFunc, nop, false, false, false, false });
+  void appendParameter(std::string_view key, uint32_t type) {
+    m_ParamIdx[std::string(key)] = static_cast<int>(m_Params.size());
+    m_Params.push_back({ std::string(key), type, nullSize, nullSize, trueFunc, validFunc, trueFunc, nop, false, false, false, false });
   }
 
   TypePropertyBuilder appendProperty(const char *key, uint32_t type) {
@@ -161,9 +163,9 @@ public:
     return appendProperty(key, static_cast<uint32_t>(type));
   }
 
-  void addComputed(const char* key, ComputeFunc func) {
+  void addComputed(std::string_view key, ComputeFunc func) {
     LOG_F("add computed {0} - {1}", m_Id, key);
-    m_Computed[key] = func;
+    m_Computed[std::string(key)] = func;
   }
 
   void addEnums(const std::map<std::string, KSYEnum>& enums) {
@@ -203,8 +205,8 @@ public:
     return m_Sequence;
   }
 
-  const TypeProperty& getProperty(const char* key) const {
-    auto iter = m_SequenceIdx.find(key);
+  const TypeProperty& getProperty(std::string_view key) const {
+    auto iter = m_SequenceIdx.find(std::string(key));
     if (iter == m_SequenceIdx.end()) {
       throw std::runtime_error(fmt::format("invalid property requested: {0}", key));
     }
@@ -220,23 +222,23 @@ public:
     return iter->second;
   }
 
-  bool hasComputed(const char* key) const {
-    return m_Computed.find(key) != m_Computed.end();
+  bool hasComputed(std::string_view key) const {
+    return m_Computed.find(std::string(key)) != m_Computed.end();
   }
 
-  std::any compute(const char* key, const IScriptQuery* obj) const {
-    return m_Computed.at(key)(*obj);
+  std::any compute(std::string_view key, const IScriptQuery* obj) const {
+    return m_Computed.at(std::string(key))(*obj);
   }
 
-  std::tuple<uint32_t, size_t> get(ObjectIndex *objIndex, const char *key) const;
-  std::tuple<uint32_t, size_t, std::vector<std::string>, bool> getWithArgs(ObjectIndex *objIndex, const char *key) const;
+  std::tuple<uint32_t, size_t> get(ObjectIndex *objIndex, std::string_view key) const;
+  std::tuple<uint32_t, size_t, std::vector<std::string>, bool> getWithArgs(ObjectIndex *objIndex, std::string_view key) const;
 
-  std::tuple<uint32_t, int, int> getPorP(ObjectIndex* objIndex, const char* key) const;
+  std::tuple<uint32_t, int, int> getPorP(ObjectIndex* objIndex, std::string_view key) const;
 
-  std::tuple<uint32_t, size_t, SizeFunc, AssignCB> getFull(ObjectIndex *objIndex, const char *key) const;
+  std::tuple<uint32_t, size_t, SizeFunc, AssignCB> getFull(ObjectIndex *objIndex, std::string_view key) const;
 
-  std::vector<TypeProperty>::const_iterator paramByKey(const char* key, int* offset) const;
-  std::vector<TypeProperty>::const_iterator propertyByKey(ObjectIndex *objIndex, const char *key, int *offset = nullptr) const;
+  std::vector<TypeProperty>::const_iterator paramByKey(std::string_view key, int* offset) const;
+  std::vector<TypeProperty>::const_iterator propertyByKey(ObjectIndex *objIndex, std::string_view key, int *offset = nullptr) const;
 
   uint32_t getId() const {
     return m_Id;
@@ -336,8 +338,8 @@ private:
                      ObjectIndexTable *index)
                      -> IndexFunc;
 
-  std::function<std::tuple<uint32_t, int, int>(ObjectIndex*)> getPorPImpl(const char* key) const;
-  std::function<std::vector<TypeProperty>::const_iterator(ObjectIndex*)> propertyByKeyFunc(const char* key, int* offset) const;
+  std::function<std::tuple<uint32_t, int, int>(ObjectIndex*)> getPorPImpl(std::string_view key) const;
+  std::function<std::vector<TypeProperty>::const_iterator(ObjectIndex*)> propertyByKeyFunc(std::string_view key, int* offset) const;
 
 private:
 

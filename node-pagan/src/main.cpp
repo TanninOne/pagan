@@ -10,10 +10,12 @@
  *  - further todos, see index_format.md
  */
 
+#include "iowrap.h"
 #include "napi.h"
 #include "parserFromKSY.h"
 #include "TypeSpec.h"
 #include <algorithm>
+#include "cpptrace/cpptrace.hpp"
 
 class SpecWrap : public Napi::ObjectWrap<SpecWrap> {
 public:
@@ -210,9 +212,16 @@ public:
           std::vector<std::string> argList;
           std::tie(typeId, propBuffer, argList) = parent->getEffectiveType(key);
 
-          return readValue(info.Env(), static_cast<TypeId>(typeId), reinterpret_cast<char*>(propBuffer), parent->getDataStream(), parent->getWriteStream());
+          std::shared_ptr<IOWrapper> dataStream = parent->getDataStream();
+          std::shared_ptr<IOWrapper> writeStream = parent->getWriteStream();
+
+          return readValue(info.Env(), static_cast<TypeId>(typeId), reinterpret_cast<char*>(propBuffer), dataStream, writeStream);
         }
       }
+    }
+    catch (const cpptrace::exception& e) {
+      e.trace().print(std::cerr, cpptrace::isatty(cpptrace::stderr_fileno));
+      throw Napi::Error::New(info.Env(), e.what());
     }
     catch (const std::exception& e) {
       throw Napi::Error::New(info.Env(), e.what());
@@ -229,6 +238,10 @@ public:
       }
 
       return getFromValue(info, std::shared_ptr<DynObject>(new DynObject(cur)), keys.Get(keys.Length() - 1).ToString().Utf8Value().c_str(), catalog);
+    }
+    catch (const cpptrace::exception& e) {
+      e.trace().print(std::cerr, cpptrace::isatty(cpptrace::stderr_fileno));
+      throw Napi::Error::New(info.Env(), e.what());
     }
     catch (const std::exception& e) {
       throw Napi::Error::New(info.Env(), e.what());
@@ -443,6 +456,10 @@ private:
     try {
       m_Wrappee->write(filePath.c_str(), *(objWrap->value().get()));
     }
+    catch (const cpptrace::exception& e) {
+      e.trace().print(std::cerr, cpptrace::isatty(cpptrace::stderr_fileno));
+      throw Napi::Error::New(info.Env(), e.what());
+    }
     catch (const std::exception& e) {
       throw Napi::Error::New(info.Env(), e.what());
     }
@@ -478,6 +495,10 @@ private:
         std::shared_ptr<DynObject>(new DynObject(m_Wrappee->getObject(spec, offset, dataStream))),
         &m_TypeCatalog
       );
+    }
+    catch (const cpptrace::exception& e) {
+      e.trace().print(std::cerr, cpptrace::isatty(cpptrace::stderr_fileno));
+      throw Napi::Error::New(info.Env(), e.what());
     }
     catch (const std::exception& e) {
       throw Napi::Error::New(info.Env(), e.what());

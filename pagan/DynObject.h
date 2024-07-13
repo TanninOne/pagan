@@ -6,9 +6,12 @@
 #include "flexi_cast.h"
 #include "IScriptQuery.h"
 #include "TypeProperty.h"
+#include "ObjectIndexTable.h"
 #include "constants.h"
 #include <cstdint>
 #include <iostream>
+#include <any>
+#include <string_view>
 
 class TypeSpec;
 class ObjectIndex;
@@ -113,7 +116,7 @@ public:
 
   bool has(const char* key) const;
 
-  std::tuple<uint32_t, uint8_t*, std::vector<std::string>> getEffectiveType(const char* key) const;
+  std::tuple<uint32_t, uint8_t*, std::vector<std::string>> getEffectiveType(std::string_view key) const;
 
   bool isCustom(const char *key) const {
     uint8_t *propBuffer;
@@ -128,48 +131,35 @@ public:
   const TypeProperty& getChildType(const char* key) const;
 
   // get the value at the specified key
-  // note: the key gets modified in the process!
-  std::any getAny(char *key) const;
+  std::any getAny(const char *key) const;
 
-  std::any getAny(std::string key) const {
-    return getAny(&key[0]);
+  std::any getAny(std::string_view key) const {
+    return getAny(key.data());
   }
 
-  std::any getAny(const std::vector<std::string>::const_iterator &cur, const std::vector<std::string>::const_iterator &end) const;
+  std::any getAny(const std::vector<std::string_view>::const_iterator &cur, const std::vector<std::string_view>::const_iterator &end) const;
 
   std::string resolveEnum(const std::string& enumName, int32_t value) const;
 
-  void setAny(const std::vector<std::string>::const_iterator &cur,
-              const std::vector<std::string>::const_iterator &end,
+  void setAny(const std::vector<std::string_view>::const_iterator &cur,
+              const std::vector<std::string_view>::const_iterator &end,
               const std::any &value);
 
-  template <typename T> T get(const char* key) const;
+  template <typename T> T get(std::string_view key) const;
 
-  template <typename T> std::vector<T> getList(const char *key) const;
+  template <typename T> std::vector<T> getList(std::string_view key) const;
 
-  template <typename T> void set(const char *key, const T &value) {
+  template <typename T> void set(std::string_view key, const T &value) {
     LOG_BRACKET_F("set pod {0}", key);
     std::shared_ptr<IOWrapper> write = m_Streams.getWrite();
 
     // find the index offset for the specified attribute
     uint32_t typeId;
-    size_t offset;
-    SizeFunc size;
+    uint8_t *propBuffer;
     AssignCB onAssign;
-    
-    std::tie(typeId, offset, size, onAssign) = m_Spec->getFull(m_ObjectIndex, key);
-    uint8_t *propBuffer = m_ObjectIndex->properties + offset;
+    std::tie(typeId, propBuffer, onAssign) = resolveTypeAtKey(key);
 
-    if (typeId == TypeId::runtime) {
-      typeId = *reinterpret_cast<uint32_t*>(propBuffer);
-      propBuffer += sizeof(uint32_t);
-    }
-
-    if (typeId >= TypeId::custom) {
-      throw IncompatibleType("expected POD");
-    }
-
-    LOG_F("write at index {0:x} + {1}", (int64_t)m_ObjectIndex->properties, offset);
+    LOG_F("write at index {0:x}", (int64_t)propBuffer);
 
     type_write(static_cast<TypeId>(typeId), reinterpret_cast<char*>(propBuffer), write, value);
     onAssign(*this, std::any(value));
@@ -185,20 +175,27 @@ private:
                               int64_t objOffset,
                               uint8_t* prop) const;
 
-  bool hasComputed(const char* key) const;
+  bool hasComputed(std::string_view key) const;
 
-  std::any compute(const char* key, const DynObject* obj) const;
+  std::tuple<uint32_t, uint8_t*, AssignCB> resolveTypeAtKey(std::string_view key, bool resolveRTT = true) const;
 
-  std::tuple<uint32_t, size_t> getSpec(const char* key) const;
+  void indexRepeatUntilArray(const TypeProperty &prop, uint8_t *propBuffer,
+                             const std::shared_ptr<IOWrapper> &data,
+                             uint64_t streamLimit,
+                             std::function<bool(uint8_t*)> repeatCondition) const;
+
+  std::any compute(std::string_view key, const DynObject* obj) const;
+
+  std::tuple<uint32_t, size_t> getSpec(std::string_view key) const;
   std::tuple<uint32_t, size_t, SizeFunc, AssignCB> getFullSpec(const char* key) const;
-  const TypeProperty& getProperty(const char* key) const;
+  const TypeProperty& getProperty(std::string_view key) const;
 
-  DynObject getObject(const char* key) const;
+  DynObject getObject(std::string_view key) const;
 
-  std::vector<DynObject> getListOfObjects(const char* key) const;
-  std::vector<std::any> getListOfAny(const char* key) const;
+  std::vector<DynObject> getListOfObjects(std::string_view key) const;
+  std::vector<std::any> getListOfAny(std::string_view key) const;
 
-  std::tuple<uint8_t*, ObjSize, uint32_t> accessArrayIndex(const char *key) const;
+  std::tuple<uint8_t*, ObjSize, uint32_t> accessArrayIndex(std::string_view key) const;
 
 private:
 
@@ -212,12 +209,12 @@ private:
 };
 
 template<>
-inline DynObject DynObject::get(const char* key) const {
+inline DynObject DynObject::get(std::string_view key) const {
   return getObject(key);
 }
 
 template<typename T>
-inline T DynObject::get(const char* key) const {
+inline T DynObject::get(std::string_view key) const {
   if (hasComputed(key)) {
     return flexi_cast<T>(compute(key, this));
   }
@@ -238,24 +235,24 @@ inline T DynObject::get(const char* key) const {
 }
 
 template<>
-inline std::vector<DynObject> DynObject::getList(const char *key) const {
+inline std::vector<DynObject> DynObject::getList(std::string_view key) const {
   return getListOfObjects(key);
 }
 
 template<>
-inline std::vector<std::any> DynObject::getList(const char* key) const {
+inline std::vector<std::any> DynObject::getList(std::string_view key) const {
   return getListOfAny(key);
 }
 
 template<typename T>
-inline std::vector<T> DynObject::getList(const char *key) const {
+inline std::vector<T> DynObject::getList(std::string_view key) const {
   LOG_BRACKET_F("get list of pod \"{0}\"", key);
 
-  size_t offset;
   uint32_t typeId;
+  uint8_t* propBuffer;
+  AssignCB onAssign;
+  std::tie(typeId, propBuffer, onAssign) = resolveTypeAtKey(key, false);
 
-  std::tie(typeId, offset) = m_Spec->get(m_ObjectIndex, key);
-  LOG_F("(2) key: \"{0}\" offset: {1}", key, offset);
   if (typeId >= TypeId::custom) {
     throw IncompatibleType("Expected POD");
   }
@@ -270,10 +267,9 @@ inline std::vector<T> DynObject::getList(const char *key) const {
     } arrayProp;
     uint64_t buff;
   };
-
-  buff = *reinterpret_cast<uint64_t*>(m_ObjectIndex->properties + offset);
-
-  LOG_F("(2) array index offset {0} + {1} -> count {2}, array offset {3}", reinterpret_cast<uint64_t>(m_ObjectIndex->properties), offset, arrayProp.count, arrayProp.offset);
+  
+  buff = *reinterpret_cast<uint64_t*>(propBuffer);
+  LOG_F("(2) array index offset {0} -> count {2}, array offset {3}", propBuffer, arrayProp.count, arrayProp.offset);
 
   uint8_t *arrayData = m_IndexTable->arrayAddress(arrayProp.offset);
 
@@ -288,12 +284,10 @@ inline std::vector<T> DynObject::getList(const char *key) const {
     memcpy(reinterpret_cast<char*>(&arrayDataPos), arrayData, sizeof(uint64_t));
     memcpy(reinterpret_cast<char*>(&streamLimit), arrayData + sizeof(uint64_t), sizeof(uint64_t));
     data->seekg(arrayDataPos);
-    m_Spec->indexEOSArray(prop, m_IndexTable, m_ObjectIndex->properties + offset,
-                          this, m_ObjectIndex->dataStream, data, streamLimit,
-                          [](uint8_t*) { return false; });
+    indexRepeatUntilArray(prop, propBuffer, data, streamLimit, [](uint8_t*){ return false; });
 
     // update array info
-    buff = *reinterpret_cast<uint64_t*>(m_ObjectIndex->properties + offset);
+    buff = *reinterpret_cast<uint64_t*>(propBuffer);
     arrayData = m_IndexTable->arrayAddress(arrayProp.offset);
   }
 

@@ -1,4 +1,4 @@
-#include <catch.hpp>
+#include <catch2/catch_test_macros.hpp>
 #include "../pagan/iowrap.h"
 
 TEST_CASE("can read&write in memory", "[iowrap]") {

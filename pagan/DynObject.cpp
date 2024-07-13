@@ -122,7 +122,7 @@ inline void DynObject::debug(size_t indent) const {
   std::string sStr;
   sStr.resize(indent * 2, ' ');
 
-  for (auto prop : getKeys()) {
+  for (const auto& prop : getKeys()) {
     int propertyOffset;
     auto iter = m_Spec->propertyByKey(m_ObjectIndex, prop.c_str(), &propertyOffset);
     std::cout << "attribute offset " << propertyOffset << std::endl;
@@ -215,7 +215,7 @@ bool DynObject::has(const char* key) const {
   return false;
 }
 
-std::tuple<uint32_t, uint8_t*, std::vector<std::string>> DynObject::getEffectiveType(const char* key) const {
+std::tuple<uint32_t, uint8_t*, std::vector<std::string>> DynObject::getEffectiveType(std::string_view key) const {
   size_t offset;
   uint32_t typeId;
   std::vector<std::string> args;
@@ -239,11 +239,12 @@ const TypeProperty& DynObject::getChildType(const char* key) const {
   return m_Spec->getProperty(key);
 }
 
-std::any DynObject::getAny(char* key) const {
+std::any DynObject::getAny(const char *key) const {
   size_t dotOffset = strcspn(key, ".");
   if (key[dotOffset] != '\0') {
     // std::string objKey(key, key + dotOffset);
-    key[dotOffset] = '\0';
+    std::string_view objKey(key, key + dotOffset);
+    // key[dotOffset] = '\0';
     DynObject obj = get<DynObject>(key);
     return obj.getAny(&key[dotOffset + 1]);
   }
@@ -296,14 +297,14 @@ std::any DynObject::getAny(char* key) const {
   }
 }
 
-std::any DynObject::getAny(const std::vector<std::string>::const_iterator &cur, const std::vector<std::string>::const_iterator &end) const {
+std::any DynObject::getAny(const std::vector<std::string_view>::const_iterator &cur, const std::vector<std::string_view>::const_iterator &end) const {
   if (cur + 1 != end) {
-    DynObject obj = get<DynObject>(cur->c_str());
+    DynObject obj = get<DynObject>(*cur);
     return obj.getAny(cur + 1, end);
   }
 
-  if (m_Spec->hasComputed(cur->c_str())) {
-    return m_Spec->compute(cur->c_str(), this);
+  if (m_Spec->hasComputed(*cur)) {
+    return m_Spec->compute(*cur, this);
   }
 
   // else: this is the "final" or "leaf" key
@@ -311,7 +312,7 @@ std::any DynObject::getAny(const std::vector<std::string>::const_iterator &cur, 
   int offsetProp;
   uint32_t typeId;
 
-  std::tie(typeId, offsetProp, offsetParam) = m_Spec->getPorP(m_ObjectIndex, cur->c_str());
+  std::tie(typeId, offsetProp, offsetParam) = m_Spec->getPorP(m_ObjectIndex, *cur);
 
   LOG_F("getAny({}) found: param {} - prop {}", *cur, offsetParam, offsetProp);
 
@@ -335,13 +336,13 @@ std::any DynObject::getAny(const std::vector<std::string>::const_iterator &cur, 
     std::any result = type_read_any(static_cast<TypeId>(typeId), index, dataStream, writeStream);
     LOG_F("getAny({}) type: {}", *cur, result.type().name());
 
-    const TypeProperty &prop = m_Spec->getProperty(cur->c_str());
+    const TypeProperty &prop = m_Spec->getProperty(*cur);
 
     if (prop.hasEnum) {
       return resolveEnum(prop.enumName, flexi_cast<int32_t>(result));
     }
 
-    return std::move(result);
+    return result;
   }
   else if (offsetParam != -1) {
     return m_Parameters.at(offsetParam);
@@ -370,9 +371,10 @@ inline std::string DynObject::resolveEnum(const std::string& enumName, int32_t v
   }
 }
 
-void DynObject::setAny(const std::vector<std::string>::const_iterator &cur, const std::vector<std::string>::const_iterator &end, const std::any &value) {
+void DynObject::setAny(const std::vector<std::string_view>::const_iterator &cur, const std::vector<std::string_view>::const_iterator &end, const std::any &value) {
+  std::string cur_str{ *cur };
   if (cur + 1 != end) {
-    DynObject obj = get<DynObject>(cur->c_str());
+    DynObject obj = get<DynObject>(cur_str);
     return obj.setAny(cur + 1, end, value);
   }
 
@@ -380,7 +382,7 @@ void DynObject::setAny(const std::vector<std::string>::const_iterator &cur, cons
   size_t offset;
   uint32_t typeId;
 
-  std::tie(typeId, offset) = m_Spec->get(m_ObjectIndex, cur->c_str());
+  std::tie(typeId, offset) = m_Spec->get(m_ObjectIndex, cur_str);
 
   if (typeId >= TypeId::custom) {
     throw IncompatibleType("expected POD");
@@ -414,15 +416,15 @@ DynObject DynObject::getObjectAtOffset(std::shared_ptr<TypeSpec> type, int64_t o
   }
 }
 
-bool DynObject::hasComputed(const char* key) const {
+bool DynObject::hasComputed(std::string_view key) const {
   return m_Spec->hasComputed(key);
 }
 
-std::any DynObject::compute(const char* key, const DynObject* obj) const {
+std::any DynObject::compute(std::string_view key, const DynObject* obj) const {
   return m_Spec->compute(key, obj);
 }
 
-std::tuple<uint32_t, size_t> DynObject::getSpec(const char* key) const {
+std::tuple<uint32_t, size_t> DynObject::getSpec(std::string_view key) const {
   return m_Spec->get(m_ObjectIndex, key);
 }
 
@@ -430,20 +432,20 @@ std::tuple<uint32_t, size_t, SizeFunc, AssignCB> DynObject::getFullSpec(const ch
   return m_Spec->getFull(m_ObjectIndex, key);
 }
 
-const TypeProperty& DynObject::getProperty(const char* key) const {
+const TypeProperty& DynObject::getProperty(std::string_view key) const {
   return m_Spec->getProperty(key);
 }
 
-DynObject DynObject::getObject(const char* key) const {
-  if (strcmp(key, "_") == 0) {
+DynObject DynObject::getObject(std::string_view key) const {
+  if (key == "_") {
     return *this;
-  } else if (strcmp(key, "_parent") == 0) {
+  } else if (key == "_parent") {
     if (m_Parent == nullptr) {
       throw std::runtime_error("parent pointer not set");
     }
     return *m_Parent;
   }
-  else if (strcmp(key, "_root") == 0) {
+  else if (key == "_root") {
     const DynObject* iter = this;
     while (iter->m_Parent != nullptr) {
       iter = iter->m_Parent;
@@ -480,7 +482,7 @@ DynObject DynObject::getObject(const char* key) const {
   return res;
 }
 
-std::vector<DynObject> DynObject::getListOfObjects(const char* key) const {
+std::vector<DynObject> DynObject::getListOfObjects(std::string_view key) const {
   auto [arrayCur, count, typeId] = accessArrayIndex(key);
 
   std::vector<DynObject> res;
@@ -503,7 +505,7 @@ std::vector<DynObject> DynObject::getListOfObjects(const char* key) const {
   return res;
 }
 
-std::tuple<uint8_t*, ObjSize, uint32_t> DynObject::accessArrayIndex(const char* key) const {
+std::tuple<uint8_t*, ObjSize, uint32_t> DynObject::accessArrayIndex(std::string_view key) const {
   LOG_BRACKET_F("get list of obj {0}", key);
 
   size_t offset;
@@ -593,7 +595,7 @@ DynObject DynObject::getArrayItem(uint32_t typeId, uint8_t **arrayCur) const {
   return getObjectAtOffset(type, objOffset, *arrayCur);
 }
 
-std::vector<std::any> DynObject::getListOfAny(const char* key) const {
+std::vector<std::any> DynObject::getListOfAny(std::string_view key) const {
   auto [arrayCur, count, typeId] = accessArrayIndex(key);
   std::shared_ptr<IOWrapper> dataStream = m_Streams.get(m_ObjectIndex->dataStream);
   std::shared_ptr<IOWrapper> writeStream = m_Streams.getWrite();
@@ -615,3 +617,32 @@ std::vector<std::any> DynObject::getListOfAny(const char* key) const {
   return res;
 }
 
+std::tuple<uint32_t, uint8_t*, AssignCB> DynObject::resolveTypeAtKey(std::string_view key, bool resolveRTT) const {
+  uint32_t typeId;
+  size_t offset;
+  SizeFunc size;
+  AssignCB onAssign;
+
+  std::tie(typeId, offset, size, onAssign) =
+      m_Spec->getFull(m_ObjectIndex, key);
+  uint8_t *propBuffer = m_ObjectIndex->properties + offset;
+
+  if ((typeId == TypeId::runtime) && resolveRTT) {
+    typeId = *reinterpret_cast<uint32_t *>(propBuffer);
+    propBuffer += sizeof(uint32_t);
+  }
+
+  if (typeId >= TypeId::custom) {
+    throw IncompatibleType("expected POD");
+  }
+  return std::make_tuple(typeId, propBuffer, onAssign);
+}
+
+void DynObject::indexRepeatUntilArray(
+    const TypeProperty &prop, uint8_t *propBuffer,
+    const std::shared_ptr<IOWrapper> &data, uint64_t streamLimit,
+    std::function<bool(uint8_t*)> repeatCondition) const {
+  m_Spec->indexEOSArray(prop, m_IndexTable, propBuffer, this,
+                        m_ObjectIndex->dataStream, data, streamLimit,
+                        repeatCondition);
+}

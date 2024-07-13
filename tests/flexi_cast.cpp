@@ -1,4 +1,4 @@
-#include <catch.hpp>
+#include <catch2/catch_test_macros.hpp>
 #include "../pagan/flexi_cast.h"
 
 TEST_CASE( "can cast to correct type", "[flexi_cast]" ) {

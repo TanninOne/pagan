@@ -1,4 +1,4 @@
-#include <catch.hpp>
+#include <catch2/catch_test_macros.hpp>
 #include <numeric>
 #include "../pagan/DynObject.h"
 #include "../pagan/TypeRegistry.h"
@@ -43,15 +43,19 @@ public:
     nestedType->appendProperty("num", TypeId::int32);
     nestedType->appendProperty("len", TypeId::uint8);
     nestedType->appendProperty("str", TypeId::string)
-      .withSize([](const IScriptQuery &obj) -> ObjSize { return std::any_cast<uint8_t>(obj.getAny("len")); })
-      .onAssign([](IScriptQuery& obj, const std::any& value) {
-        std::vector<std::string> keyVec{ "len" };
-        obj.setAny(keyVec.begin(), keyVec.end(), static_cast<uint8_t>(std::any_cast<std::string>(value).length()));
-      });
+        .withSize([](const IScriptQuery &obj) -> ObjSize {
+          return std::any_cast<uint8_t>(obj.getAny("len"));
+        })
+        .onAssign([](IScriptQuery &obj, const std::any &value) {
+          std::vector<std::string_view> keyVec{"len"};
+          obj.setAny(
+              keyVec.begin(), keyVec.end(),
+              static_cast<uint8_t>(std::any_cast<std::string>(value).length()));
+        });
     nestedType->appendProperty("lst", TypeId::string)
-      .withSize([](const IScriptQuery&) { return 3; })
-      .withCount([](const IScriptQuery&) { return 3; });
-// typedef std::function<void(IScriptQuery &object)> AssignCB;
+        .withSize([](const IScriptQuery &) { return 3; })
+        .withCount([](const IScriptQuery &) { return 3; });
+    // typedef std::function<void(IScriptQuery &object)> AssignCB;
 
     testType->appendProperty("nested", nestedType->getId());
 
@@ -292,4 +296,3 @@ TEST_CASE_METHOD(FixtureWithRTPODArray, "correctly indexes eos sized array of ru
   REQUIRE(items.size() == 6);
   REQUIRE(items[5] == 13);
 }
-
