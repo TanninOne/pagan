@@ -1,10 +1,10 @@
 #pragma once
 
-#include "format.h"
 #include "iowrap.h"
 #include <iostream>
 #include <memory>
 #include <thread>
+#include <vector>
 
 static const size_t LOG_COUNT = 100;
 
@@ -39,9 +39,9 @@ private:
 #define LOG_BRACKET_F(...)
 #else
 #define LOG(...) LogBracket::log(__VA_ARGS__)
-#define LOG_F(pattern, ...) LogBracket::log(fmt::format(pattern, __VA_ARGS__))
+#define LOG_F(pattern, ...) LogBracket::log(std::format(pattern, __VA_ARGS__))
 #define LOG_BRACKET(...) LogBracket brack = LogBracket::create(__VA_ARGS__)
-#define LOG_BRACKET_F(pattern, ...) LogBracket brack = LogBracket::create(fmt::format(pattern, __VA_ARGS__))
+#define LOG_BRACKET_F(pattern, ...) LogBracket brack = LogBracket::create(std::format(pattern, __VA_ARGS__))
 #define LOG_PRINT() LogBracket::print()
 #endif
 

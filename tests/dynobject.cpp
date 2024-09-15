@@ -1,8 +1,8 @@
-#include <catch2/catch_test_macros.hpp>
-#include <numeric>
 #include "../pagan/DynObject.h"
 #include "../pagan/TypeRegistry.h"
 #include "../pagan/TypeSpec.h"
+
+#include "catch2/catch_test_macros.hpp"
 
 class SimpleFixture {
 protected:

@@ -1,5 +1,7 @@
 #include "util.h"
 #include "iowrap.h"
+
+#include <string>
 #include <iomanip>
 
 thread_local int LogBracket::s_Indent = 0;

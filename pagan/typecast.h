@@ -12,8 +12,8 @@ static const uint64_t WRITTEN_BIT = 0x01LLU << 63;
 
 class IncompatibleType : public std::runtime_error {
 public:
-  IncompatibleType(const char *pos)
-    : std::runtime_error(fmt::format("Type is incompatible {}", pos).c_str())
+  IncompatibleType(std::string_view pos)
+    : std::runtime_error(std::format("Type is incompatible {}", pos))
   {
   }
 };

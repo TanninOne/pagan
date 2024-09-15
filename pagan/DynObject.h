@@ -9,7 +9,6 @@
 #include "ObjectIndexTable.h"
 #include "constants.h"
 #include <cstdint>
-#include <iostream>
 #include <any>
 #include <string_view>
 
@@ -269,7 +268,7 @@ inline std::vector<T> DynObject::getList(std::string_view key) const {
   };
   
   buff = *reinterpret_cast<uint64_t*>(propBuffer);
-  LOG_F("(2) array index offset {0} -> count {2}, array offset {3}", propBuffer, arrayProp.count, arrayProp.offset);
+  LOG_F("(2) array index offset {} -> count {}, array offset {}", reinterpret_cast<uint64_t>(propBuffer), arrayProp.count, arrayProp.offset);
 
   uint8_t *arrayData = m_IndexTable->arrayAddress(arrayProp.offset);
 
@@ -318,7 +317,7 @@ inline void DynObject::setList(const char *key, const std::vector<DynObject> &va
   AssignCB onAssign;
 
   std::tie(typeId, offset, size, onAssign) = m_Spec.lock()->getFull(index, m_Bitmask, key);
-  LogBracket::log(fmt::format("key {0} offset {1}", key, offset));
+  LogBracket::log(std::format("key {0} offset {1}", key, offset));
 
   if (typeId < TypeId::custom) {
     throw IncompatibleType();
@@ -329,7 +328,7 @@ inline void DynObject::setList(const char *key, const std::vector<DynObject> &va
   index->seekp(m_IndexOffset + offset);
   write->seekg(0, std::ios::end);
 
-  LogBracket::log(fmt::format("write at index {0} + {1}", m_IndexOffset, offset));
+  LogBracket::log(std::format("write at index {0} + {1}", m_IndexOffset, offset));
 
   ObjSize listCount;
   ObjSize listOffset;
@@ -347,7 +346,7 @@ inline void DynObject::setList(const char *key, const std::vector<DynObject> &va
   listCount = static_cast<ObjSize>(value.size());
   offset = arrayIndex->tellp();
 
-  LogBracket::log(fmt::format("write list info at {0} count {1} offset {2}", index->tellp(), listCount, offset));
+  LogBracket::log(std::format("write list info at {0} count {1} offset {2}", index->tellp(), listCount, offset));
   index->write(reinterpret_cast<char*>(&listCount), sizeof(ObjSize));
   index->write(reinterpret_cast<char*>(&offset), sizeof(ObjSize));
 
@@ -375,7 +374,7 @@ inline void DynObject::setList(const char *key, const std::vector<T> &value) {
     throw IncompatibleType("Expected POD");
   }
 
-  // LogBracket::log(fmt::format("write at index {0} + {1}", m_ObjectIndex->properties, offset));
+  // LogBracket::log(std::format("write at index {0} + {1}", m_ObjectIndex->properties, offset));
 
   char *index = reinterpret_cast<char*>(m_ObjectIndex->properties + offset);
 

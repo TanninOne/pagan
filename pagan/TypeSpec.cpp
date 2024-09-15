@@ -1,7 +1,19 @@
 #include "TypeSpec.h"
 #include "DynObject.h"
-#include <numeric>
 #include "cpptrace/cpptrace.hpp"
+#include <ios>
+
+template <>
+struct std::formatter<std::streampos> {
+    constexpr auto parse(std::format_parse_context& ctx) {
+        return ctx.begin();
+    }
+
+    auto format(const std::streampos& obj, std::format_context& ctx) const {
+        return std::format_to(ctx.out(), "{}", static_cast<uint64_t>(obj));
+    }
+};
+
 
 TypeSpec::TypeSpec(const char *name, uint32_t typeId, TypeRegistry *registry)
     : m_Name(name), m_Registry(registry), m_Id(typeId), m_StaticSize(0), m_BaseBuffer()
@@ -118,7 +130,7 @@ uint8_t *TypeSpec::readPropToBuffer(const TypeProperty &prop, ObjectIndexTable *
       uint64_t dataOffset = data->tellg();
       ObjSize arrayOffset = indexTable->allocateArray(16);
       uint8_t *curPos = indexTable->arrayAddress(arrayOffset);
-      LOG_F("allocate eos array data {}, arrayidx {}, arrayref {}, eos {}", dataOffset, arrayOffset, (uint64_t)curPos, streamLimit);
+      LOG_F("allocate eos array data {}, arrayidx {}, arrayref {}, eos {}", dataOffset, arrayOffset, reinterpret_cast<uint64_t>(curPos), static_cast<uint64_t>(streamLimit));
       memcpy(curPos, reinterpret_cast<char *>(&dataOffset), sizeof(uint64_t));
       memcpy(curPos + sizeof(uint64_t), reinterpret_cast<char *>(&streamLimit), sizeof(uint64_t));
 
@@ -174,7 +186,7 @@ void TypeSpec::writeIndex(ObjectIndexTable *indexTable, ObjectIndex *objIndex, s
   DataStreamId dataStream = 0;
   DataOffset dataOffset = data->tellg();
   LOG_BRACKET_F("write index for obj type {} data {} size {}", m_Name, dataOffset, m_IndexSize);
-  // auto bracket = LogBracket::create(fmt::format("write index for obj type {} data {} size {}", m_Name, dataOffset, m_IndexSize));
+  // auto bracket = LogBracket::create(std::format("write index for obj type {} data {} size {}", m_Name, dataOffset, m_IndexSize));
 
   // second: the bitmask reflecting which attributes are present
   //   for now this is all zeros because we don't actually know yet
@@ -200,7 +212,7 @@ void TypeSpec::writeIndex(ObjectIndexTable *indexTable, ObjectIndex *objIndex, s
   {
     LOG_F("index seq {0}/{1}", i, m_Sequence.size());
     int imod8 = i % 8;
-    // LogBracket::log(fmt::format("seq {0} {1} {2:x} (vs {3:x})", i, m_Sequence[i].key, reinterpret_cast<int64_t>(propertiesEnd), reinterpret_cast<int64_t>(buffer)));
+    // LogBracket::log(std::format("seq {0} {1} {2:x} (vs {3:x})", i, m_Sequence[i].key, reinterpret_cast<int64_t>(propertiesEnd), reinterpret_cast<int64_t>(buffer)));
     TypeProperty &prop = m_Sequence[i];
 
     if (!prop.index)
@@ -281,13 +293,13 @@ std::function<std::vector<TypeProperty>::const_iterator(ObjectIndex*)> TypeSpec:
 
   if (iter == m_Sequence.cend()) {
     return [key](ObjectIndex*) -> std::vector<TypeProperty>::const_iterator {
-      throw std::runtime_error(fmt::format("property not present in object: {}", key));
+      throw std::runtime_error(std::format("property not present in object: {}", key));
     };
   }
 
   return [idx, key, this](ObjectIndex* objectIndex) {
     if (!isBitSet(objectIndex, idx)) {
-      throw std::runtime_error(fmt::format("property not present in object: {}", key));
+      throw std::runtime_error(std::format("property not present in object: {}", key));
     }
     return m_Sequence.cbegin() + idx;
   };
@@ -362,7 +374,7 @@ std::tuple<uint32_t, size_t> TypeSpec::get(ObjectIndex *objIndex, std::string_vi
     {
       if (!isBitSet(objIndex, idx))
       {
-        throw std::runtime_error(fmt::format("Property not set: {0}", key));
+        throw std::runtime_error(std::format("Property not set: {0}", key));
       }
       return std::tuple<uint32_t, size_t>(iter->typeId, propertyOffset);
     }
@@ -370,7 +382,7 @@ std::tuple<uint32_t, size_t> TypeSpec::get(ObjectIndex *objIndex, std::string_vi
 
   LOG_F("no param or property {} found in type {}", key, m_Name);
 
-  throw cpptrace::runtime_error(fmt::format("Property not found: {0}", key));
+  throw cpptrace::runtime_error(std::format("Property not found: {0}", key));
 }
 
 std::tuple<uint32_t, int, int> TypeSpec::getPorP(ObjectIndex *objIndex, std::string_view key_sv) const
@@ -388,7 +400,7 @@ std::tuple<uint32_t, int, int> TypeSpec::getPorP(ObjectIndex *objIndex, std::str
   }
   catch (const std::exception& e) {
     m_PoPCache[key] = [key](ObjectIndex*) -> std::tuple<uint32_t, int, int> {
-      throw cpptrace::runtime_error(fmt::format("Property not found: {0}", key));
+      throw cpptrace::runtime_error(std::format("Property not found: {0}", key));
     };
   }
 
@@ -411,7 +423,7 @@ std::tuple<uint32_t, size_t, std::vector<std::string>, bool> TypeSpec::getWithAr
     {
       if (!isBitSet(objIndex, idx))
       {
-        throw std::runtime_error(fmt::format("Property not set: {0}", key));
+        throw std::runtime_error(std::format("Property not set: {0}", key));
       }
       return std::tuple<uint32_t, size_t, std::vector<std::string>, bool>(iter->typeId, propertyOffset, iter->argList, iter->isList);
     }
@@ -419,7 +431,7 @@ std::tuple<uint32_t, size_t, std::vector<std::string>, bool> TypeSpec::getWithAr
 
   LOG_F("no param or property {} found in type {}", key, m_Name);
 
-  throw cpptrace::runtime_error(fmt::format("Property not found: {0}", key));
+  throw cpptrace::runtime_error(std::format("Property not found: {0}", key));
 }
 
 std::tuple<uint32_t, size_t, SizeFunc, AssignCB> TypeSpec::getFull(ObjectIndex *objIndex, std::string_view key) const
@@ -466,7 +478,7 @@ uint8_t *TypeSpec::indexCustom(const TypeProperty &prop, uint32_t typeId,
   {
     // static size so the object itself doesn't have to be indexed at this time
 
-    // LogBracket::log(fmt::format("{0} static size {1}", prop.key, staticSize));
+    // LogBracket::log(std::format("{0} static size {1}", prop.key, staticSize));
     res = type_index_obj(reinterpret_cast<char *>(index), data, dataPos, staticSize, obj);
   }
   else
@@ -559,7 +571,7 @@ auto TypeSpec::makeIndexFunc(const TypeProperty &prop,
         auto after = data->tellg();
         if ((after - before) == 0)
         {
-          throw std::runtime_error(fmt::format("0 byte custom type \"{}\" could lead to endless loop", m_Registry->getById(typeId)->getName()));
+          throw std::runtime_error(std::format("0 byte custom type \"{}\" could lead to endless loop", m_Registry->getById(typeId)->getName()));
         }
         return res;
       }

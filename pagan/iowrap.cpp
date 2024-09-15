@@ -13,7 +13,7 @@ IOWrapper *IOWrapper::fromFile(const char *filePath, bool out) {
   str->seekg(0);
   str->exceptions(std::ios::failbit | std::ios::badbit);
   if (!str->is_open()) {
-    throw std::runtime_error(fmt::format("failed to open \"{}\"", filePath));
+    throw std::runtime_error(std::format("failed to open \"{}\"", filePath));
   }
 
   return new IOWrapper(str, static_cast<int64_t>(fileSize), FILE_BUFFER_SIZE);

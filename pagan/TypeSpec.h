@@ -208,7 +208,7 @@ public:
   const TypeProperty& getProperty(std::string_view key) const {
     auto iter = m_SequenceIdx.find(std::string(key));
     if (iter == m_SequenceIdx.end()) {
-      throw std::runtime_error(fmt::format("invalid property requested: {0}", key));
+      throw std::runtime_error(std::format("invalid property requested: {0}", key));
     }
     return m_Sequence[iter->second];
   }
@@ -217,7 +217,7 @@ public:
     auto iter = m_Enums.find(enumName);
     if (iter == m_Enums.end()) {
       // search will continue in the parent, this is only an issue if there is no parent
-      throw std::runtime_error(fmt::format("invalid enum name: {0}", enumName));
+      throw std::runtime_error(std::format("invalid enum name: {0}", enumName));
     }
     return iter->second;
   }

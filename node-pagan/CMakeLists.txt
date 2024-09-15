@@ -33,17 +33,10 @@ set(SOURCES ${SOURCE_FILES} ${SOURCE_FILES_PAGAN} ${SOURCE_FILES_SYEXPR} ../paga
 
 add_library(${PROJECT_NAME} SHARED ${HEADER_FILES} ${HEADER_FILES_PAGAN} ${HEADER_FILES_SYEXPR} ${SOURCES} ${CMAKE_JS_SRC})
 
-# set_property(TARGET ${PROJECT_NAME} PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
-
 set_target_properties(${PROJECT_NAME} PROPERTIES PREFIX "" SUFFIX ".node")
 
 target_include_directories(${PROJECT_NAME} PRIVATE ${CMAKE_JS_INC} ${yaml-cpp_INCLUDE_DIRS})
 target_link_libraries(${PROJECT_NAME} ${CMAKE_JS_LIB} yaml-cpp::yaml-cpp cpptrace::cpptrace ${yaml-cpp_LIBRARIES})
-
-# target_link_libraries(${PROJECT_NAME}
-#     debug ${EXTERN}/yaml-cpp/build/Debug/yaml-cppd.lib
-#     optimized ${EXTERN}/yaml-cpp/build/Release/yaml-cpp.lib
-# )
 
 add_compile_options("/std:c++latest")
 
@@ -55,34 +48,12 @@ execute_process(COMMAND node -p "require('node-addon-api').include" WORKING_DIRE
 string(REGEX REPLACE "[\r\n\"]" "" NODE_ADDON_API_DIR ${NODE_ADDON_API_DIR})
 
 message(STATUS ${CMAKE_JS_SRC} ${CMAKE_JS_INC})
-# target_include_directories(${PROJECT_NAME} PRIVATE ${CMAKE_JS_INC} ${NODE_ADDON_API_DIR} ${EXTERN}/yaml-cpp/include)
-# target_include_directories(${PROJECT_NAME} PRIVATE ${CMAKE_JS_INC} ${NODE_ADDON_API_DIR})
-# target_include_directories(${PROJECT_NAME} PRIVATE ${CMAKE_JS_INC})
 
 add_definitions(-DNAPI_VERSION=4 -DNOLOG)
-# add_definitions(-DNAPI_VERSION=4)
-
-# Include(FetchContent)
-# 
-# FetchContent_Declare(
-#  Catch2
-#  GIT_REPOSITORY https://github.com/catchorg/Catch2.git
-#  GIT_TAG        v3.6.0)
-# 
-# FetchContent_MakeAvailable(Catch2)
-# FetchContent_GetProperties(Catch2)
-# if (NOT Catch2_POPULATED)
-#   message(status ${Catch2_SOURCE_DIR} -- ${Catch2_BINARY_DIR})
-#   # add_subdirectory(${Catch2_SOURCE_DIR}/include)
-# endif()
 
 file(GLOB TEST_FILES "../tests/*.cpp")
-add_executable(tests ${TEST_FILES} ../pagan/expr.cpp ../pagan/iowrap.cpp ../pagan/format.cc ../pagan/TypeSpec.cpp ../pagan/DynObject.cpp ../pagan/TypeRegistry.cpp ../pagan/typecast.cpp ../pagan/objectindex.cpp ../pagan/ObjectIndexTable.cpp ../pagan/StreamRegistry.cpp ../pagan/util.cpp ../pagan/syexpr/shunting_yard.cpp ../pagan/syexpr/evaluate.cpp ../pagan/syexpr/token.cpp)
-# target_include_directories(tests PRIVATE ${Catch2_SOURCE_DIR}/single_include/catch2)
-# target_include_directories(tests PRIVATE ${CMAKE_JS_INC} ${EXTERN}/PEGTL/include ${EXTERN}/yaml-cpp/include ${EXTERN}/StackWalker/Main/StackWalker)
-# target_link_libraries(tests PRIVATE Catch2::Catch2WithMain)
+add_executable(tests ${TEST_FILES} ../pagan/expr.cpp ../pagan/iowrap.cpp ../pagan/format.cc ../pagan/TypeSpec.cpp ../pagan/DynObject.cpp ../pagan/TypeRegistry.cpp ../pagan/typecast.cpp ../pagan/objectindex.cpp ../pagan/ObjectIndexTable.cpp ../pagan/StreamRegistry.cpp ../pagan/util.cpp)
 
-# catch2_Catch2_Catch2WithMain
 target_include_directories(tests PRIVATE ${Catch2_INCLUDE_DIRS})
 
 target_link_libraries(tests

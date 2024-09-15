@@ -19,4 +19,5 @@ extern
 
 generators
 build
+build_wsl
 .cache

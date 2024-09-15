@@ -10,13 +10,12 @@
 #include <unordered_set>
 #include <vector>
 
-#include "./syexpr/shunting_yard.h"
-#include "./syexpr/evaluate.h"
+#include "shunting_yard.h"
+#include "evaluate.h"
+#include "token.h"
 
 #include "IScriptQuery.h"
 #include "flexi_cast.h"
-#include "format.h"
-#include "syexpr/token.h"
 
 typedef std::function<std::any(const std::any& args)> AnyFunc;
 
@@ -99,7 +98,7 @@ inline std::any tokenToAny(const SYP::Token& input)
   }
   default:
     throw std::runtime_error(
-        fmt::format("can't convert type to any: {}", static_cast<int>(input.type)));
+        std::format("can't convert type to any: {}", static_cast<int>(input.type)));
   }
 }
 
@@ -181,7 +180,7 @@ inline std::function<T(const IScriptQuery &)> makeFunc(const std::string &code) 
     return makeFuncImpl<T>(code);
   }
   catch (const std::exception& e) {
-    throw std::runtime_error(fmt::format("failed to compile function \"{}\": {}", code, e.what()).c_str());
+    throw std::runtime_error(std::format("failed to compile function \"{}\": {}", code, e.what()).c_str());
   }
 }
 
@@ -197,7 +196,7 @@ inline std::function<int32_t(const IScriptQuery &)> makeFunc(const std::string &
     return makeFuncImpl<int32_t>(code);
   }
   catch (const std::exception& e) {
-    throw std::runtime_error(fmt::format("failed to compile function \"{}\": {}", code, e.what()).c_str());
+    throw std::runtime_error(std::format("failed to compile function \"{}\": {}", code, e.what()).c_str());
   }
 }
 
@@ -207,6 +206,6 @@ inline std::function<T(IScriptQuery &, const std::any&)> makeFuncMutable(const s
     return makeFuncMutableImpl<T>(code);
   }
   catch (const std::exception& e) {
-    throw std::runtime_error(fmt::format("failed to compile function \"{}\": {}", code, e.what()).c_str());
+    throw std::runtime_error(std::format("failed to compile function \"{}\": {}", code, e.what()).c_str());
   }
 }

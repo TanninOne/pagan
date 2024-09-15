@@ -1,15 +1,15 @@
 #include "typecast.h"
 #include "util.h"
-#include "format.h"
 #include "dynobject.h"
-#include <iostream>
+
 #include <cassert>
 #include <windows.h>
+#include <format>
 
 #define DEF_TYPE(VAL_TYPE, TYPE_ID) \
 template <> VAL_TYPE type_read(TypeId type, char *index, std::shared_ptr<IOWrapper> &data, std::shared_ptr<IOWrapper> &write, char **indexAfter) { \
   if (type != TYPE_ID) {\
-    throw IncompatibleType(fmt::format("Expected {}, got {}", TYPE_ID, type).c_str());\
+    throw IncompatibleType(std::format("Expected {}, got {}", static_cast<int>(TYPE_ID), static_cast<int>(type)));\
   }\
   VAL_TYPE result;\
   memcpy(reinterpret_cast<char*>(&result), index, sizeof(VAL_TYPE));\
@@ -20,7 +20,7 @@ template <> VAL_TYPE type_read(TypeId type, char *index, std::shared_ptr<IOWrapp
 }\
 template <> char *type_write(TypeId type, char *index, std::shared_ptr<IOWrapper> &write, const VAL_TYPE &value) {\
   if (type != TYPE_ID) {\
-    throw IncompatibleType(fmt::format("Expected {}, got {}", TYPE_ID, type).c_str());\
+    throw IncompatibleType(std::format("Expected {}, got {}", static_cast<int>(TYPE_ID), static_cast<int>(type)).c_str());\
   }\
   memcpy(index, reinterpret_cast<const char*>(&value), sizeof(VAL_TYPE));\
   return index + sizeof(VAL_TYPE);\
@@ -38,7 +38,7 @@ DEF_TYPE(float, TypeId::float32);
 
 template <> std::string type_read(TypeId type, char *index, std::shared_ptr<IOWrapper> &data, std::shared_ptr<IOWrapper> &write, char **indexAfter) {
   if ((type != TypeId::stringz) && (type != TypeId::string)) {
-    throw IncompatibleType(fmt::format("Expected string, got {}", type).c_str());
+    throw IncompatibleType(std::format("Expected string, got {}", static_cast<int>(type)));
   }
 
   int32_t offset;
@@ -66,7 +66,7 @@ template <> std::string type_read(TypeId type, char *index, std::shared_ptr<IOWr
   if (type == TypeId::string) {
     memcpy(reinterpret_cast<char*>(&size), index, sizeof(int32_t));
     index += sizeof(int32_t);
-    // LogBracket::log(fmt::format(">>> dynamic size {0}", size));
+    // LogBracket::log(std::format(">>> dynamic size {0}", size));
     result.resize(size);
     stream->read(&result[0], size);
   }
@@ -193,7 +193,7 @@ template <typename T> char *type_index_num(char *index, std::shared_ptr<IOWrappe
 }
 
 char *type_index_obj(char *index, std::shared_ptr<IOWrapper> &data, std::streampos dataPos, ObjSize size, const DynObject *obj) {
-  // LogBracket::log(fmt::format("write index obj type {}, data {}, size {}", obj->getTypeId(), offset, size));
+  // LogBracket::log(std::format("write index obj type {}, data {}, size {}", obj->getTypeId(), offset, size));
   int64_t pos = dataPos;
   memcpy(index, reinterpret_cast<char*>(&pos), sizeof(int64_t));
   data->seekg(dataPos + std::streamoff(size));
@@ -221,7 +221,7 @@ template <> char *type_index_impl<std::string>(char *index, std::shared_ptr<IOWr
     while ((ch = data->get()) != '\0') {}
     index += sizeof(int32_t);
   }
-  // LogBracket::log(fmt::format("<<< write index impl offset {} size {}", offset, size));
+  // LogBracket::log(std::format("<<< write index impl offset {} size {}", offset, size));
   if (offset < 100) {
     LOG_F("index string offset {}", offset);
   }

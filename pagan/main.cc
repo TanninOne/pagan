@@ -17,7 +17,7 @@ std::string debugVector(const DynObject &vec) {
   float x = vec.get<float>("x");
   float y = vec.get<float>("y");
   float z = vec.get<float>("z");
-  return fmt::format("{0} x {1} x {2}", x, y, z);
+  return std::format("{0} x {1} x {2}", x, y, z);
 }
 
 int main() {
@@ -161,21 +161,21 @@ int main() {
     {
       DynObject vec = obj.get<DynObject>("baseVec");
 
-      std::cout << fmt::format("vector: {0}", debugVector(vec)) << std::endl;
+      std::cout << std::format("vector: {0}", debugVector(vec)) << std::endl;
       vec.set("x", 3.14f);
-      std::cout << fmt::format("vector after: {0}", debugVector(vec)) << std::endl;
+      std::cout << std::format("vector after: {0}", debugVector(vec)) << std::endl;
     }
 
     {
       DynObject vec = obj.get<DynObject>("baseVec");
-      std::cout << fmt::format("vector 2: {0}", debugVector(vec)) << std::endl;
+      std::cout << std::format("vector 2: {0}", debugVector(vec)) << std::endl;
     }
 
     {
       std::cout << " -------------- vectors ----------------- " << std::endl;
       std::vector<DynObject> vectors = obj.getList<DynObject>("vectors");
       for (auto vec : vectors) {
-        std::cout << fmt::format("vec: {0}", debugVector(vec)) << std::endl;
+        std::cout << std::format("vec: {0}", debugVector(vec)) << std::endl;
       }
       std::cout << " -------------- /vectors ----------------- " << std::endl;
     }
@@ -196,7 +196,7 @@ int main() {
       std::cout << " -------------- vectors after ----------------- " << std::endl;
       std::vector<DynObject> vectors = obj.getList<DynObject>("vectors");
       for (auto vec : vectors) {
-        std::cout << fmt::format("vec: {0}", debugVector(vec)) << std::endl;
+        std::cout << std::format("vec: {0}", debugVector(vec)) << std::endl;
       }
       std::cout << " -------------- /vectors after ----------------- " << std::endl;
     }

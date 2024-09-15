@@ -96,7 +96,7 @@ uint8_t *DynObject::savePropTo(std::shared_ptr<IOWrapper> file, uint32_t typeId,
     std::shared_ptr<TypeSpec> type(m_Spec->getRegistry()->getById(typeId));
 
     if (!type) {
-      throw IncompatibleType(fmt::format("type id not found in registry {}", typeId).c_str());
+      throw IncompatibleType(std::format("type id not found in registry {}", typeId).c_str());
     }
 
     DynObject obj = getObjectAtOffset(type, objOffset, propBuffer);
@@ -147,7 +147,7 @@ inline void DynObject::debug(size_t indent) const {
       std::shared_ptr<TypeSpec> type(m_Spec->getRegistry()->getById(typeId));
 
       if (!type) {
-        throw IncompatibleType(fmt::format("type id not found in registry {}", typeId).c_str());
+        throw IncompatibleType(std::format("type id not found in registry {}", typeId).c_str());
       }
 
       getObjectAtOffset(type, objOffset, propBuffer).debug(indent + 1);
@@ -357,9 +357,9 @@ inline std::string DynObject::resolveEnum(const std::string& enumName, int32_t v
     const KSYEnum& enumMap = m_Spec->getEnumByName(enumName);
     auto enumValue = enumMap.find(value);
     if (enumValue == enumMap.end()) {
-      throw std::runtime_error(fmt::format("invalid enum value {0} -> {1}", enumName, value));
+      throw std::runtime_error(std::format("invalid enum value {0} -> {1}", enumName, value));
     }
-    return fmt::format("{0}::{1}", enumName, enumValue->second);
+    return std::format("{0}::{1}", enumName, enumValue->second);
   }
   catch (const std::exception& e) {
     if (m_Parent != nullptr) {
@@ -460,7 +460,7 @@ DynObject DynObject::getObject(std::string_view key) const {
 
   if (typeId < TypeId::custom) {
     LOG_F("different type stored {0}", typeId);
-    throw IncompatibleType(fmt::format("expected custom item, got {}", typeId).c_str());
+    throw IncompatibleType(std::format("expected custom item, got {}", typeId).c_str());
   }
 
   // offset - either into the data stream if the object hasn't been cached yet or to
@@ -470,7 +470,7 @@ DynObject DynObject::getObject(std::string_view key) const {
   std::shared_ptr<TypeSpec> type(m_Spec->getRegistry()->getById(typeId));
 
   if (!type) {
-    throw IncompatibleType(fmt::format("type id not found in registry {}", typeId).c_str());
+    throw IncompatibleType(std::format("type id not found in registry {}", typeId).c_str());
   }
 
   // LOG_F("child object {} type {} - offset {}", key, type->getName(), objOffset);
@@ -517,7 +517,7 @@ std::tuple<uint8_t*, ObjSize, uint32_t> DynObject::accessArrayIndex(std::string_
   // if it's a runtime type the concrete type is stored with each item individually
   // so we can't currently determine if the type at runtime is actually valid
   if ((typeId < TypeId::custom) && (typeId != TypeId::runtime)) {
-    throw IncompatibleType(fmt::format("expected custom list, got {}", typeId).c_str());
+    throw IncompatibleType(std::format("expected custom list, got {}", typeId).c_str());
   }
 
   std::shared_ptr<IOWrapper> writeStream = m_Streams.getWrite();
