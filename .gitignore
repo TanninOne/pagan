@@ -20,4 +20,5 @@ extern
 generators
 build
 build_wsl
+install
 .cache

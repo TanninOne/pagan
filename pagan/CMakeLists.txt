@@ -44,6 +44,8 @@ set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS ON)
 add_library(${PROJECT_NAME} SHARED ${SOURCES})
 add_library(pagan::pagan ALIAS ${PROJECT_NAME})
 
-target_link_libraries(${PROJECT_NAME} yaml-cpp::yaml-cpp cpptrace::cpptrace pagan-expr)
+target_link_libraries(${PROJECT_NAME} yaml-cpp::yaml-cpp cpptrace::cpptrace pagan::expr)
 
 set_property(TARGET ${PROJECT_NAME} PROPERTY CXX_STANDARD 20)
+
+set_target_properties(${PROJECT_NAME} PROPERTIES EXPORT_NAME "pagan::pagan")
