@@ -3,7 +3,6 @@
 #include "ObjectIndexTable.h"
 #include "DynObject.h"
 #include "TypeRegistry.h"
-#include "iowrap.h"
 #include <memory>
 
 class Parser

@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.25)
 
 project(pagan VERSION 0.1.0 LANGUAGES CXX)
 
-add_compile_options("/std:c++latest")
+add_compile_options("/std:c++20")
 
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)

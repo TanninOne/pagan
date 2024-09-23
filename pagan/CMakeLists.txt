@@ -4,12 +4,18 @@ add_definitions(-DNOMINMAX)
 
 find_package(yaml-cpp REQUIRED)
 find_package(cpptrace REQUIRED)
-find_package(pagan-expr REQUIRED)
+find_package(pagan-expr CONFIG REQUIRED)
+
+set(HEADERS
+  DynObject.h
+  ObjectIndexTable.h
+  Parser.h
+  parserFromKSY.h
+  TypeRegistry.h
+  )
 
 set(SOURCES
-  constants.h
   DynObject.cpp
-  DynObject.h
   expr.cpp
   expr.h
   flexi_cast.cpp
@@ -20,18 +26,14 @@ set(SOURCES
   objectindex.cpp
   objectindex.h
   ObjectIndexTable.cpp
-  ObjectIndexTable.h
   Parser.cpp
-  Parser.h
   parserFromKSY.cpp
-  parserFromKSY.h
   StreamRegistry.cpp
   StreamRegistry.h
   typecast.cpp
   typecast.h
   TypeProperty.h
   TypeRegistry.cpp
-  TypeRegistry.h
   types.h
   Typespec.cpp
   TypeSpec.h
@@ -39,10 +41,17 @@ set(SOURCES
   util.h
 )
 
-set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS ON)
+if (MSVC)
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /EHsc")
+  set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS ON)
+endif()
 
 add_library(${PROJECT_NAME} SHARED ${SOURCES})
 add_library(pagan::pagan ALIAS ${PROJECT_NAME})
+
+target_sources(${PROJECT_NAME}
+  PUBLIC FILE_SET HEADERS FILES ${HEADERS}
+)
 
 target_link_libraries(${PROJECT_NAME} yaml-cpp::yaml-cpp cpptrace::cpptrace pagan::expr)
 
