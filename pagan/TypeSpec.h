@@ -1,7 +1,6 @@
 #pragma once
 
 #include "types.h"
-#include "typecast.h"
 #include "typeregistry.h"
 #include "objectindex.h"
 #include "streamregistry.h"
@@ -12,13 +11,9 @@
 #include "typeproperty.h"
 
 #include <vector>
-#include <atomic>
-#include <algorithm>
 #include <tuple>
-#include <sstream>
 #include <functional>
 #include <any>
-#include <cassert>
 #include <variant>
 #include <string_view>
 

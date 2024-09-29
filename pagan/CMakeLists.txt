@@ -8,10 +8,14 @@ find_package(pagan-expr CONFIG REQUIRED)
 
 set(HEADERS
   DynObject.h
+  iowrap.h
+  objectindex.h
   ObjectIndexTable.h
   Parser.h
   parserFromKSY.h
+  StreamRegistry.h
   TypeRegistry.h
+  types.h
   )
 
 set(SOURCES
@@ -21,20 +25,16 @@ set(SOURCES
   flexi_cast.cpp
   flexi_cast.h
   iowrap.cpp
-  iowrap.h
   IScriptQuery.h
   objectindex.cpp
-  objectindex.h
   ObjectIndexTable.cpp
   Parser.cpp
   parserFromKSY.cpp
   StreamRegistry.cpp
-  StreamRegistry.h
   typecast.cpp
   typecast.h
   TypeProperty.h
   TypeRegistry.cpp
-  types.h
   Typespec.cpp
   TypeSpec.h
   util.cpp

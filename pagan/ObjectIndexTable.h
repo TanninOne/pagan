@@ -1,10 +1,11 @@
 #pragma once
 
-#include <vector>
-#include <memory>
 #include "objectindex.h"
 #include "types.h"
 #include "streamregistry.h"
+
+#include <vector>
+#include <memory>
 
 class TypeSpec;
 

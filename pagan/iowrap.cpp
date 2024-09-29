@@ -1,5 +1,8 @@
 #include "iowrap.h"
 
+#include <sstream>
+#include <fstream>
+
 static const int FILE_BUFFER_SIZE = 128 * 1024;
 
 IOWrapper *IOWrapper::memoryBuffer() {

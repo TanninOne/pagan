@@ -1,12 +1,5 @@
 #pragma once
 
-#include <memory>
-
-#include <any>
-#include <functional>
-#include <iostream>
-#include <map>
-#include <typeindex>
 #include <unordered_set>
 #include <vector>
 
@@ -16,6 +9,11 @@
 
 #include "IScriptQuery.h"
 #include "flexi_cast.h"
+
+#include <any>
+#include <functional>
+#include <map>
+#include <typeindex>
 
 typedef std::function<std::any(const std::any& args)> AnyFunc;
 

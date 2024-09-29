@@ -1,10 +1,11 @@
 #pragma once
 
+#include "IScriptQuery.h"
+#include "iowrap.h"
+
 #include <functional>
 #include <any>
 #include <variant>
-#include "IScriptQuery.h"
-#include "iowrap.h"
 
 enum TypeId {
   int8 = 0,

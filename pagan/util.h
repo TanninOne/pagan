@@ -1,9 +1,9 @@
 #pragma once
 
 #include "iowrap.h"
+
 #include <iostream>
 #include <memory>
-#include <thread>
 #include <vector>
 
 static const size_t LOG_COUNT = 100;

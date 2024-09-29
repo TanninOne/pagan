@@ -2,7 +2,7 @@
 
 #include "iowrap.h"
 #include "types.h"
-#include "IScriptQuery.h"
+
 #include <cstdint>
 #include <stdexcept>
 #include <memory>

@@ -7,6 +7,7 @@
 #include <yaml-cpp/yaml.h>
 #include <charconv>
 #include <regex>
+#include <fstream>
 
 typedef std::map<std::string, uint32_t> NamedTypes;
 

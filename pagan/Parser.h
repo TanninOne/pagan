@@ -1,9 +1,10 @@
 #pragma once
 
+#include <memory>
+
 #include "ObjectIndexTable.h"
 #include "DynObject.h"
 #include "TypeRegistry.h"
-#include <memory>
 
 class Parser
 {

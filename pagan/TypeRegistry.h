@@ -1,8 +1,9 @@
 #pragma once
 
+#include "types.h"
+
 #include <memory>
 #include <map>
-#include "types.h"
 
 class TypeSpec;
 
