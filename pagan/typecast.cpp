@@ -181,7 +181,7 @@ template <typename T> char *type_index_num(char *index, std::shared_ptr<IOWrappe
   try {
     data->read(index, sizeof(T));
     T x = *reinterpret_cast<T*>(index);
-    LOG_F("indexed num {} at {}", *reinterpret_cast<T*>(index), data->tellg() - sizeof(T), x);
+    LOG_F("indexed num {} at {}", *reinterpret_cast<T*>(index), data->tellg() - sizeof(T));
     if (!debug.empty()) {
       LOG_F("{}: {}", debug, static_cast<int>(x));
     }
