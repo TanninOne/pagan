@@ -7,15 +7,21 @@ find_package(cpptrace REQUIRED)
 find_package(pagan-expr CONFIG REQUIRED)
 
 set(HEADERS
+  constants.h
   DynObject.h
+  flexi_cast.h
   iowrap.h
+  IScriptQuery.h
   objectindex.h
   ObjectIndexTable.h
   Parser.h
   parserFromKSY.h
   StreamRegistry.h
+  TypeProperty.h
   TypeRegistry.h
+  typecast.h
   types.h
+  util.h
   )
 
 set(SOURCES
@@ -23,22 +29,17 @@ set(SOURCES
   expr.cpp
   expr.h
   flexi_cast.cpp
-  flexi_cast.h
   iowrap.cpp
-  IScriptQuery.h
   objectindex.cpp
   ObjectIndexTable.cpp
   Parser.cpp
   parserFromKSY.cpp
   StreamRegistry.cpp
   typecast.cpp
-  typecast.h
-  TypeProperty.h
   TypeRegistry.cpp
   Typespec.cpp
   TypeSpec.h
   util.cpp
-  util.h
 )
 
 if (MSVC)
