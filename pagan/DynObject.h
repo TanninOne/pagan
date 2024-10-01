@@ -16,7 +16,7 @@ class TypeSpec;
 class ObjectIndex;
 class ObjectIndexTable;
 
-typedef std::map<int32_t, std::string> KSYEnum;
+using KSYEnum = std::map<int32_t, std::string>;
 
 class WrongTypeRequestedError : public std::runtime_error {
 public:
@@ -66,8 +66,7 @@ public:
 
   DynObject(DynObject &&) = default;
 
-  ~DynObject() {
-  }
+  ~DynObject() = default;
 
   DynObject& operator=(const DynObject& reference) {
     if (this != &reference) {
@@ -79,7 +78,7 @@ public:
     return *this;
   }
 
-  DynObject &operator=(DynObject &&) = default;
+  DynObject &operator=(DynObject &&) = delete;
 
   void setParameters(const std::vector<std::any>& params) {
     m_Parameters = params;
@@ -130,19 +129,19 @@ public:
   const TypeProperty& getChildType(const char* key) const;
 
   // get the value at the specified key
-  std::any getAny(const char *key) const;
+  std::any getAny(const char *key) const override;
 
-  std::any getAny(std::string_view key) const {
+  std::any getAny(std::string_view key) const override {
     return getAny(key.data());
   }
 
-  std::any getAny(const std::vector<std::string_view>::const_iterator &cur, const std::vector<std::string_view>::const_iterator &end) const;
+  std::any getAny(const std::vector<std::string_view>::const_iterator &cur, const std::vector<std::string_view>::const_iterator &end) const override;
 
   std::string resolveEnum(const std::string& enumName, int32_t value) const;
 
   void setAny(const std::vector<std::string_view>::const_iterator &cur,
               const std::vector<std::string_view>::const_iterator &end,
-              const std::any &value);
+              const std::any &value) override;
 
   template <typename T> T get(std::string_view key) const;
 
@@ -181,7 +180,7 @@ private:
   void indexRepeatUntilArray(const TypeProperty &prop, uint8_t *propBuffer,
                              const std::shared_ptr<IOWrapper> &data,
                              uint64_t streamLimit,
-                             std::function<bool(uint8_t*)> repeatCondition) const;
+                             const std::function<bool(uint8_t*)> &repeatCondition) const;
 
   std::any compute(std::string_view key, const DynObject* obj) const;
 
@@ -224,7 +223,7 @@ inline T DynObject::get(std::string_view key) const {
   std::tie(typeId, propBuffer, args) = getEffectiveType(key);
 
   if (typeId >= TypeId::custom) {
-    throw IncompatibleType("expected POD");
+    throw IncompatibleType(std::format("expected POD for key {}, got {}", key, typeId));
   }
 
   std::shared_ptr<IOWrapper> dataStream = m_Streams.get(m_ObjectIndex->dataStream);
@@ -253,7 +252,7 @@ inline std::vector<T> DynObject::getList(std::string_view key) const {
   std::tie(typeId, propBuffer, onAssign) = resolveTypeAtKey(key, false);
 
   if (typeId >= TypeId::custom) {
-    throw IncompatibleType("Expected POD");
+    throw IncompatibleType(std::format("expected POD for key {}, got {}", key, typeId));
   }
 
   std::shared_ptr<IOWrapper> dataStream = m_Streams.get(m_ObjectIndex->dataStream);
@@ -371,7 +370,7 @@ inline void DynObject::setList(const char *key, const std::vector<T> &value) {
   std::tie(typeId, offset, size, onAssign) = getFullSpec(key);
 
   if (typeId >= TypeId::custom) {
-    throw IncompatibleType("Expected POD");
+    throw IncompatibleType(std::format("expected POD for key {}, got {}", key, typeId));
   }
 
   // LogBracket::log(std::format("write at index {0} + {1}", m_ObjectIndex->properties, offset));

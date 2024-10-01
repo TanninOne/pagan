@@ -240,11 +240,8 @@ const TypeProperty& DynObject::getChildType(const char* key) const {
 }
 
 std::any DynObject::getAny(const char *key) const {
-  size_t dotOffset = strcspn(key, ".");
-  if (key[dotOffset] != '\0') {
-    // std::string objKey(key, key + dotOffset);
+  if (size_t dotOffset = strcspn(key, "."); key[dotOffset] != '\0') {
     std::string_view objKey(key, key + dotOffset);
-    // key[dotOffset] = '\0';
     DynObject obj = get<DynObject>(key);
     return obj.getAny(&key[dotOffset + 1]);
   }
@@ -269,10 +266,10 @@ std::any DynObject::getAny(const char *key) const {
     }
 
     if (typeId >= TypeId::custom) {
-      throw IncompatibleType("expected POD");
+      throw IncompatibleType(std::format("expected POD for key {}, got {}", key, typeId));
     }
 
-    char* index = reinterpret_cast<char*>(propBuffer);
+    auto* index = reinterpret_cast<char*>(propBuffer);
 
     std::shared_ptr<IOWrapper> dataStream = m_Streams.get(m_ObjectIndex->dataStream);
     std::shared_ptr<IOWrapper> writeStream = m_Streams.getWrite();
@@ -280,9 +277,8 @@ std::any DynObject::getAny(const char *key) const {
     std::any result = type_read_any(static_cast<TypeId>(typeId), index, dataStream, writeStream);
 
     // std::shared_ptr<TypeSpec> type(m_Spec->getRegistry()->getById(typeId));
-    TypeProperty prop = m_Spec->getProperty(key);
 
-    if (prop.hasEnum) {
+    if (TypeProperty prop = m_Spec->getProperty(key); prop.hasEnum) {
       return resolveEnum(prop.enumName, flexi_cast<int32_t>(result));
     }
 
@@ -325,10 +321,10 @@ std::any DynObject::getAny(const std::vector<std::string_view>::const_iterator &
     }
 
     if (typeId >= TypeId::custom) {
-      throw IncompatibleType("expected POD");
+      throw IncompatibleType(std::format("expected POD for key {}, got {}", *cur, typeId));
     }
 
-    char* index = reinterpret_cast<char*>(propBuffer);
+    auto* index = reinterpret_cast<char*>(propBuffer);
 
     std::shared_ptr<IOWrapper> dataStream = m_Streams.get(m_ObjectIndex->dataStream);
     std::shared_ptr<IOWrapper> writeStream = m_Streams.getWrite();
@@ -385,10 +381,10 @@ void DynObject::setAny(const std::vector<std::string_view>::const_iterator &cur,
   std::tie(typeId, offset) = m_Spec->get(m_ObjectIndex, cur_str);
 
   if (typeId >= TypeId::custom) {
-    throw IncompatibleType("expected POD");
+    throw IncompatibleType(std::format("expected POD for key {}, got {}", cur_str, typeId));
   }
 
-  char *index = reinterpret_cast<char*>(m_ObjectIndex->properties + offset);
+  auto *index = reinterpret_cast<char*>(m_ObjectIndex->properties + offset);
 
   std::shared_ptr<IOWrapper> dataStream = m_Streams.get(m_ObjectIndex->dataStream);
   std::shared_ptr<IOWrapper> writeStream = m_Streams.getWrite();
@@ -460,7 +456,7 @@ DynObject DynObject::getObject(std::string_view key) const {
 
   if (typeId < TypeId::custom) {
     LOG_F("different type stored {0}", typeId);
-    throw IncompatibleType(std::format("expected custom item, got {}", typeId).c_str());
+    throw IncompatibleType(std::format("expected custom item for key {}, got {}", key, typeId));
   }
 
   // offset - either into the data stream if the object hasn't been cached yet or to
@@ -470,14 +466,14 @@ DynObject DynObject::getObject(std::string_view key) const {
   std::shared_ptr<TypeSpec> type(m_Spec->getRegistry()->getById(typeId));
 
   if (!type) {
-    throw IncompatibleType(std::format("type id not found in registry {}", typeId).c_str());
+    throw IncompatibleType(std::format("type id {} for key {} not found in registry", typeId, key));
   }
-
-  // LOG_F("child object {} type {} - offset {}", key, type->getName(), objOffset);
 
   DynObject res = getObjectAtOffset(type, objOffset, propBuffer);
   std::vector<std::any> args;
-  std::transform(argList.begin(), argList.end(), std::back_inserter(args), [this](const std::string& key) { return getAny(key.c_str()); });
+  std::transform(
+      argList.begin(), argList.end(), std::back_inserter(args),
+      [this](const std::string &key) { return getAny(key.c_str()); });
   res.setParameters(args);
   return res;
 }
@@ -517,7 +513,7 @@ std::tuple<uint8_t*, ObjSize, uint32_t> DynObject::accessArrayIndex(std::string_
   // if it's a runtime type the concrete type is stored with each item individually
   // so we can't currently determine if the type at runtime is actually valid
   if ((typeId < TypeId::custom) && (typeId != TypeId::runtime)) {
-    throw IncompatibleType(std::format("expected custom list, got {}", typeId).c_str());
+    throw IncompatibleType(std::format("expected custom list for key {}, got {}", key, typeId));
   }
 
   std::shared_ptr<IOWrapper> writeStream = m_Streams.getWrite();
@@ -633,7 +629,7 @@ std::tuple<uint32_t, uint8_t*, AssignCB> DynObject::resolveTypeAtKey(std::string
   }
 
   if (typeId >= TypeId::custom) {
-    throw IncompatibleType("expected POD");
+    throw IncompatibleType(std::format("expected POD for key {}, got {}", key, typeId));
   }
   return std::make_tuple(typeId, propBuffer, onAssign);
 }
@@ -641,7 +637,7 @@ std::tuple<uint32_t, uint8_t*, AssignCB> DynObject::resolveTypeAtKey(std::string
 void DynObject::indexRepeatUntilArray(
     const TypeProperty &prop, uint8_t *propBuffer,
     const std::shared_ptr<IOWrapper> &data, uint64_t streamLimit,
-    std::function<bool(uint8_t*)> repeatCondition) const {
+    const std::function<bool(uint8_t*)> &repeatCondition) const {
   m_Spec->indexEOSArray(prop, m_IndexTable, propBuffer, this,
                         m_ObjectIndex->dataStream, data, streamLimit,
                         repeatCondition);

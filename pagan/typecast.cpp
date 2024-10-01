@@ -9,7 +9,7 @@
 #define DEF_TYPE(VAL_TYPE, TYPE_ID) \
 template <> VAL_TYPE type_read(TypeId type, char *index, std::shared_ptr<IOWrapper> &data, std::shared_ptr<IOWrapper> &write, char **indexAfter) { \
   if (type != TYPE_ID) {\
-    throw IncompatibleType(std::format("Expected {}, got {}", static_cast<int>(TYPE_ID), static_cast<int>(type)));\
+    throw IncompatibleType(std::format("expected type {}, got {}", static_cast<int>(TYPE_ID), static_cast<int>(type)));\
   }\
   VAL_TYPE result;\
   memcpy(reinterpret_cast<char*>(&result), index, sizeof(VAL_TYPE));\
@@ -20,7 +20,7 @@ template <> VAL_TYPE type_read(TypeId type, char *index, std::shared_ptr<IOWrapp
 }\
 template <> char *type_write(TypeId type, char *index, std::shared_ptr<IOWrapper> &write, const VAL_TYPE &value) {\
   if (type != TYPE_ID) {\
-    throw IncompatibleType(std::format("Expected {}, got {}", static_cast<int>(TYPE_ID), static_cast<int>(type)).c_str());\
+    throw IncompatibleType(std::format("expected type {}, got {}", static_cast<int>(TYPE_ID), static_cast<int>(type)));\
   }\
   memcpy(index, reinterpret_cast<const char*>(&value), sizeof(VAL_TYPE));\
   return index + sizeof(VAL_TYPE);\
@@ -38,19 +38,18 @@ DEF_TYPE(float, TypeId::float32);
 
 template <> std::string type_read(TypeId type, char *index, std::shared_ptr<IOWrapper> &data, std::shared_ptr<IOWrapper> &write, char **indexAfter) {
   if ((type != TypeId::stringz) && (type != TypeId::string)) {
-    throw IncompatibleType(std::format("Expected string, got {}", static_cast<int>(type)));
+    throw IncompatibleType(std::format("expected string, got {}", static_cast<int>(type)));
   }
 
   int32_t offset;
   memcpy(reinterpret_cast<char*>(&offset), index, sizeof(int32_t));
   index += sizeof(int32_t);
 
-  auto &stream = (offset < 0)
+  const auto &stream = (offset < 0)
     ? write
     : data;
 
   offset = std::abs(offset);
-  // stream->clear();
 
   std::streampos curPos = stream->tellg();
 
@@ -66,7 +65,6 @@ template <> std::string type_read(TypeId type, char *index, std::shared_ptr<IOWr
   if (type == TypeId::string) {
     memcpy(reinterpret_cast<char*>(&size), index, sizeof(int32_t));
     index += sizeof(int32_t);
-    // LogBracket::log(std::format(">>> dynamic size {0}", size));
     result.resize(size);
     stream->read(&result[0], size);
   }
@@ -74,7 +72,7 @@ template <> std::string type_read(TypeId type, char *index, std::shared_ptr<IOWr
     int ch;
     size = 0;
     while ((ch = stream->get()) != '\0') {
-      result.push_back(ch);
+      result.push_back(static_cast<char>(ch));
       ++size;
     }
   }
@@ -87,7 +85,6 @@ template <> std::string type_read(TypeId type, char *index, std::shared_ptr<IOWr
   if ((size * -1) != seekOffset) {
     stream->seekg(curPos);
   }
-  // LOG_F("string read {0:x}: {1}", stream->tellg(), result);
 
   return result;
 }
@@ -97,7 +94,7 @@ template <> std::vector<uint8_t> type_read(TypeId type, char *index, std::shared
   memcpy(reinterpret_cast<char*>(&offset), index, sizeof(int32_t));
   index += sizeof(int32_t);
 
-  auto &stream = (offset < 0)
+  const auto &stream = (offset < 0)
     ? write
     : data;
 
@@ -117,7 +114,6 @@ template <> std::vector<uint8_t> type_read(TypeId type, char *index, std::shared
 
   index += sizeof(int32_t);
   if (size > 0) {
-    // result.resize(size);
     stream->read(reinterpret_cast<char*>(&result[0]), size);
   }
 
@@ -168,13 +164,6 @@ char *type_write(TypeId type, char *index, std::shared_ptr<IOWrapper> &write, co
   return pos;
 }
 
-/*
-template <>
-void type_write(TypeId type, std::shared_ptr<IOWrapper> &index, std::shared_ptr<IOWrapper> &write, const uint64_t &value) {
-
-}
-*/
-
 template <typename T> char *type_index_impl(char *index, std::shared_ptr<IOWrapper> &data, const SizeFunc &size, const DynObject *obj, bool sizeField, const std::string &debug);
 
 template <typename T> char *type_index_num(char *index, std::shared_ptr<IOWrapper> &data, const std::string &debug) {
@@ -193,7 +182,6 @@ template <typename T> char *type_index_num(char *index, std::shared_ptr<IOWrappe
 }
 
 char *type_index_obj(char *index, std::shared_ptr<IOWrapper> &data, std::streampos dataPos, ObjSize size, const DynObject *obj) {
-  // LogBracket::log(std::format("write index obj type {}, data {}, size {}", obj->getTypeId(), offset, size));
   int64_t pos = dataPos;
   memcpy(index, reinterpret_cast<char*>(&pos), sizeof(int64_t));
   data->seekg(dataPos + std::streamoff(size));
@@ -201,9 +189,9 @@ char *type_index_obj(char *index, std::shared_ptr<IOWrapper> &data, std::streamp
 }
 
 template <> char *type_index_impl<std::string>(char *index, std::shared_ptr<IOWrapper> &data, const SizeFunc &sizeFunc, const DynObject *obj, bool sizeField, const std::string &debug) {
-  int32_t offset = static_cast<int32_t>(data->tellg());
+  auto offset = static_cast<int32_t>(data->tellg());
   if (offset < 0) {
-    throw new std::runtime_error("invalid data offset");
+    throw InvalidData("invalid data offset");
   }
 
   static bool paused = false;
@@ -217,11 +205,11 @@ template <> char *type_index_impl<std::string>(char *index, std::shared_ptr<IOWr
     memcpy(index + sizeof(int32_t), &size, sizeof(int32_t));
     index += sizeof(int32_t) * 2;
   } else {
-    char ch;
-    while ((ch = data->get()) != '\0') {}
+    while (data->get() != 0) {
+      // skip
+    }
     index += sizeof(int32_t);
   }
-  // LogBracket::log(std::format("<<< write index impl offset {} size {}", offset, size));
   if (offset < 100) {
     LOG_F("index string offset {}", offset);
   }
@@ -230,18 +218,17 @@ template <> char *type_index_impl<std::string>(char *index, std::shared_ptr<IOWr
 
 template <> char *type_index_impl<std::vector<uint8_t>>(char *index, std::shared_ptr<IOWrapper> &data, const SizeFunc &sizeFunc, const DynObject *obj, bool sizeField, const std::string &debug) {
   assert(sizeField == true);
-  int32_t offset = static_cast<int32_t>(data->tellg());
+  auto offset = static_cast<int32_t>(data->tellg());
   if (offset < 0) {
-    throw std::runtime_error("invalid data offset");
+    throw InvalidData("invalid data offset");
   }
 
   memcpy(index, &offset, sizeof(int32_t));
 
   ObjSize size = sizeFunc(*obj);
   if (size < 0) {
-    throw std::runtime_error("invalid size");
+    throw InvalidData("invalid size");
   }
-  std::streampos pos = data->tellg();
   data->seekg(static_cast<size_t>(offset) + size);
   memcpy(index + sizeof(int32_t), &size, sizeof(int32_t));
   index += sizeof(int32_t) * 2;
@@ -250,22 +237,17 @@ template <> char *type_index_impl<std::vector<uint8_t>>(char *index, std::shared
 }
 
 char* type_index_bits(TypeId typeId, uint8_t offset, uint8_t size, char * index, std::shared_ptr<IOWrapper> & data, const DynObject * obj, const std::string & debug) {
-  try {
-    uint32_t mask = ((1 << size) - 1) << offset;
-    uint32_t *ptr = reinterpret_cast<uint32_t*>(index);
-    *ptr = mask;
-    ptr += 1;
+  uint32_t mask = ((1 << size) - 1) << offset;
+  auto *ptr = reinterpret_cast<uint32_t*>(index);
+  *ptr = mask;
+  ptr += 1;
 
-    data->read(index + 4, 4);
-    int byteOffset = (offset + size) / 8;
-    data->seekg(data->tellg() - (4 - byteOffset));
-    *ptr &= mask;
+  data->read(index + 4, 4);
+  int byteOffset = (offset + size) / 8;
+  data->seekg(data->tellg() - (4 - byteOffset));
+  *ptr &= mask;
 
-    return index + 8;
-  }
-  catch (const std::exception&) {
-    throw;
-  }
+  return index + 8;
 }
 
 
@@ -279,14 +261,14 @@ char *type_index(TypeId type, const SizeFunc &size, char *index, std::shared_ptr
     case TypeId::uint16: return type_index_num<uint16_t>(index, data, debug);
     case TypeId::uint32: return type_index_num<uint32_t>(index, data, debug);
     case TypeId::uint64: return type_index_num<uint64_t>(index, data, debug);
-    case TypeId::bits: throw std::runtime_error("indexing bitmask not implemented");
+    case TypeId::bits: throw InvalidData("indexing bitmask not implemented");
     case TypeId::float32_iee754: return type_index_num<float>(index, data, debug);
     case TypeId::stringz: return type_index_impl<std::string>(index, data, size, obj, false, debug);
     case TypeId::string: return type_index_impl<std::string>(index, data, size, obj, true, debug);
     case TypeId::bytes: return type_index_impl<std::vector<uint8_t>>(index, data, size, obj, true, debug);
     case TypeId::custom: return type_index_obj(index, data, data->tellg(), size(*obj), obj);
+    default: throw InvalidData("invalid type");
   }
-  throw std::runtime_error("invalid type");
 }
 
 std::any type_read_any(TypeId type, char *index, std::shared_ptr<IOWrapper> &data, std::shared_ptr<IOWrapper> &write, char **indexAfter) {
@@ -299,15 +281,14 @@ std::any type_read_any(TypeId type, char *index, std::shared_ptr<IOWrapper> &dat
     case TypeId::uint16: return type_read<uint16_t>(type, index, data, write, indexAfter);
     case TypeId::uint32: return type_read<uint32_t>(type, index, data, write, indexAfter);
     case TypeId::uint64: return type_read<uint64_t>(type, index, data, write, indexAfter);
-    case TypeId::bits: throw std::runtime_error("writing bitmask unsupported");
+    case TypeId::bits: throw InvalidData("writing bitmask unsupported");
     case TypeId::float32_iee754: return type_read<float>(type, index, data, write, indexAfter);
     case TypeId::stringz: return type_read<std::string>(type, index, data, write, indexAfter);
     case TypeId::string: return type_read<std::string>(type, index, data, write, indexAfter);
     case TypeId::bytes: return type_read<std::vector<uint8_t>>(type, index, data, write, indexAfter);
-    // case TypeId::custom: return std::shared_ptr<DynObject>(new DynObject(type_read<DynObject>(type, index, data, write)));
-    case TypeId::custom: throw std::runtime_error("not implemented");
+    case TypeId::custom: throw InvalidData("not implemented");
+    default: return std::any();
   }
-  return std::any();
 }
 
 char *type_write_any(TypeId type, char *index, std::shared_ptr<IOWrapper> &write, const std::any &value) {
@@ -320,44 +301,43 @@ char *type_write_any(TypeId type, char *index, std::shared_ptr<IOWrapper> &write
     case TypeId::uint16: return type_write<uint16_t>(type, index, write, flexi_cast<uint16_t>(value));
     case TypeId::uint32: return type_write<uint32_t>(type, index, write, flexi_cast<uint32_t>(value));
     case TypeId::uint64: return type_write<uint64_t>(type, index, write, flexi_cast<uint64_t>(value));
-    case TypeId::bits: throw std::runtime_error("writing bitmask unsupported");
+    case TypeId::bits: throw InvalidData("writing bitmask unsupported");
     case TypeId::float32_iee754: return type_write<float>(type, index, write, flexi_cast<float>(value));
     case TypeId::stringz: return type_write<std::string>(type, index, write, flexi_cast<std::string>(value));
     case TypeId::string: return type_write<std::string>(type, index, write, flexi_cast<std::string>(value));
-    default: throw std::runtime_error("not implemented");
+    default: throw InvalidData("not implemented");
   }
 }
 
 template <typename T>
-void stream_write(std::shared_ptr<IOWrapper> &output, const T &value);
+void stream_write(const std::shared_ptr<IOWrapper> &output, const T &value);
 
-void stream_write_strz(std::shared_ptr<IOWrapper> &output, const std::string &value) {
+void stream_write_strz(const std::shared_ptr<IOWrapper> &output, const std::string &value) {
   output->write(value.c_str(), value.length() + 1);
 }
 
-void stream_write_str(std::shared_ptr<IOWrapper> &output, const std::string &value) {
+void stream_write_str(const std::shared_ptr<IOWrapper> &output, const std::string &value) {
   output->write(value.c_str(), value.length());
 }
 
-void stream_write_bytes(std::shared_ptr<IOWrapper> &output, const std::vector<uint8_t> &value) {
+void stream_write_bytes(const std::shared_ptr<IOWrapper> &output, const std::vector<uint8_t> &value) {
   output->write(reinterpret_cast<const char*>(value.data()), value.size());
 }
 
 template <typename T>
-void stream_write(std::shared_ptr<IOWrapper> &output, const T &value) {
+void stream_write(const std::shared_ptr<IOWrapper> &output, const T &value) {
   output->write(reinterpret_cast<const char*>(&value), sizeof(T));
 }
 
-void type_copy_bytes(std::shared_ptr<IOWrapper> &output, char *index, std::shared_ptr<IOWrapper> &data, std::shared_ptr<IOWrapper> &write, char **indexAfter) {
+void type_copy_bytes(const std::shared_ptr<IOWrapper> &output, char *index,
+                     const std::shared_ptr<IOWrapper> &data,
+                     const std::shared_ptr<IOWrapper> &write,
+                     char **indexAfter) {
   int32_t offset;
-  memcpy(reinterpret_cast<char*>(&offset), index, sizeof(int32_t));
+  memcpy(reinterpret_cast<char *>(&offset), index, sizeof(int32_t));
   index += sizeof(int32_t);
 
-  auto &stream = (offset < 0)
-    ? write
-    : data;
-
-  bool modified = offset < 0;
+  const auto &stream = (offset < 0) ? write : data;
 
   offset = std::abs(offset);
 
@@ -369,7 +349,7 @@ void type_copy_bytes(std::shared_ptr<IOWrapper> &output, char *index, std::share
   }
 
   int32_t size;
-  memcpy(reinterpret_cast<char*>(&size), index, sizeof(int32_t));
+  memcpy(reinterpret_cast<char *>(&size), index, sizeof(int32_t));
 
   static char buffer[4096];
 
@@ -401,13 +381,15 @@ void type_copy_any(TypeId type, char *index, std::shared_ptr<IOWrapper> &output,
   case TypeId::uint16: stream_write(output, type_read<uint16_t>(type, index, data, write, indexAfter)); break;
   case TypeId::uint32: stream_write(output, type_read<uint32_t>(type, index, data, write, indexAfter)); break;
   case TypeId::uint64: stream_write(output, type_read<uint64_t>(type, index, data, write, indexAfter)); break;
-  case TypeId::bits: throw std::runtime_error("copy type not implemented");
+  case TypeId::bits: throw InvalidData("copy type not implemented");
   case TypeId::float32_iee754: stream_write(output, type_read<float>(type, index, data, write, indexAfter)); break;
   case TypeId::stringz: stream_write_strz(output, type_read<std::string>(type, index, data, write, indexAfter)); break;
   case TypeId::string: stream_write_str(output, type_read<std::string>(type, index, data, write, indexAfter)); break;
-  // case TypeId::bytes: stream_write_bytes(output, type_read<std::vector<uint8_t>>(type, index, data, write, indexAfter)); break;
   case TypeId::bytes: type_copy_bytes(output, index, data, write, indexAfter); break;
-  case TypeId::custom: throw std::runtime_error("not implemented");
+  case TypeId::custom: throw InvalidData("not implemented");
+  default:
+    // nop
+  break;
   }
 }
 

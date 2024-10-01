@@ -12,8 +12,16 @@ static const uint64_t WRITTEN_BIT = 0x01LLU << 63;
 
 class IncompatibleType : public std::runtime_error {
 public:
-  IncompatibleType(std::string_view pos)
-    : std::runtime_error(std::format("Type is incompatible {}", pos))
+  explicit IncompatibleType(std::string_view pos)
+    : std::runtime_error(std::format("Type is incompatible: \"{}\"", pos))
+  {
+  }
+};
+
+class InvalidData : public std::runtime_error {
+public:
+  explicit InvalidData(std::string_view pos)
+    : std::runtime_error(std::format("Invalid data: \"{}\"", pos))
   {
   }
 };
