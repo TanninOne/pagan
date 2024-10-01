@@ -131,9 +131,7 @@ public:
   // get the value at the specified key
   std::any getAny(const char *key) const override;
 
-  std::any getAny(std::string_view key) const override {
-    return getAny(key.data());
-  }
+  std::any getAny(std::string_view key) const override;
 
   std::any getAny(const std::vector<std::string_view>::const_iterator &cur, const std::vector<std::string_view>::const_iterator &end) const override;
 
@@ -252,7 +250,7 @@ inline std::vector<T> DynObject::getList(std::string_view key) const {
   std::tie(typeId, propBuffer, onAssign) = resolveTypeAtKey(key, false);
 
   if (typeId >= TypeId::custom) {
-    throw IncompatibleType(std::format("expected POD for key {}, got {}", key, typeId));
+    throw IncompatibleType(std::format("expected POD list for key {}, got {}", key, typeId));
   }
 
   std::shared_ptr<IOWrapper> dataStream = m_Streams.get(m_ObjectIndex->dataStream);
@@ -370,7 +368,7 @@ inline void DynObject::setList(const char *key, const std::vector<T> &value) {
   std::tie(typeId, offset, size, onAssign) = getFullSpec(key);
 
   if (typeId >= TypeId::custom) {
-    throw IncompatibleType(std::format("expected POD for key {}, got {}", key, typeId));
+    throw IncompatibleType(std::format("expected POD list for key {}, got {}", key, typeId));
   }
 
   // LogBracket::log(std::format("write at index {0} + {1}", m_ObjectIndex->properties, offset));

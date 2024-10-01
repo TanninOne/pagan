@@ -348,6 +348,10 @@ std::any DynObject::getAny(const std::vector<std::string_view>::const_iterator &
   }
 }
 
+std::any DynObject::getAny(std::string_view key) const {
+  return getAny(key.data());
+}
+
 inline std::string DynObject::resolveEnum(const std::string& enumName, int32_t value) const {
   try {
     const KSYEnum& enumMap = m_Spec->getEnumByName(enumName);
