@@ -10,10 +10,11 @@ The object is then only actually parsed at runtime as the objects are accessed. 
 pagan only knows PODs, custom types and lists thereof. However, one special type is "runtime" which will be resolved at runtime when the field is actually parsed.
 The index will reserve space for the runtime type so it only has to be resolved once.
 
-Lists can either have 
-* fixed size (as in: set by the specification)
-* calculated size (as in: read as data or calculated from data in the file, available before the list is indexed)
+Lists can either 
+* have fixed size (as in: set by the specification)
+* have calculated size (as in: read as data or calculated from data in the file, available before the list is indexed)
 * extend to the end of the "stream". "End of stream" means: either the end of the parent object (which needs to be of known size) or the end of the file.
+* repeat until a condition is met
 
 ## Data stream
 
@@ -22,7 +23,7 @@ If the file has compressed or encrypted chunks though, each of these chunks can 
 
 ## Indices
 
-There are actually 3 separate buffers:
+There are 3 separate buffers:
 
 ### Object index
 
@@ -68,7 +69,7 @@ The representation of each property depends on the type:
 
 A fully indexed array will contain the evaluated item count and the offset into the array index.
 
-It may also contain -2 for the count, the constant for COUNT_EOS (End Of Stream). This means the array hasn't been indexed yet and goes to the end of the fixed size parent or end of the data stream. The offset still references the array index where we store 2x64 bit values, the index into the data stream and the length to the end of the stream/parent.
+It may also contain -2 (COUNT_EOS - End Of Stream) or -3 (COUNT_MORE - repeat until condition is met) for the count. This means the array hasn't been indexed yet and it's length will only be known after indexing. The offset still references the array index where we store 2x64 bit values, the index into the data stream and the length to the end of the stream/parent.
 
 #### "runtime" type
 
@@ -83,9 +84,9 @@ The array index contains 15 * (data stream offset, string length)
 
 ## Known issues
 
-* (1) objects can have a 64bit offset into the data stream, strings and data blobs are also stored using an index into the stream but that is limited to 32bit because we have to store it together with the blob size into a 64bit value. This could be worked around by treating the string/data offset as an offset to the owning objecte and/or storing blob offset and size as variable size integers.
+* (1) objects can have a 64bit offset into the data stream, strings and data blobs are also stored using an index into the stream but that is limited to 32bit because we have to store it together with the blob size into a 64bit value. This could be worked around by treating the string/data offset as an offset to the owning object and/or storing blob offset and size as variable size integers.
 Or splitting the file into multiple data streams if 32bit offsets don't suffice.
-* (2) data blob fields are stored as (offset, length) while arrays are stored as (length, offset). Inconsistence makes me sad
+* (2) data blob fields are stored as (offset, length) while arrays are stored as (length, offset). Inconsistency makes me sad
 * (3) we currently use 32 bit to store the actual type for "runtime" fields, that seems pretty excessive, I want to see the ksy declaring more than, say, 65k custom types...
 * (4) when storing a list of "runtime" type, we currently store the concrete type with each individual item rather than with the list, despite the fact that the way types are declared, the all have to have the same type. This is probably extremely harmful to performance
-* (5) code uses the words "array" and "list" interchangably, sanitize that
+* (5) code uses the words "array" and "list" interchangeably, sanitize that
