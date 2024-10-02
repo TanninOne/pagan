@@ -6,6 +6,8 @@
 #include <memory>
 #include <vector>
 
+namespace pagan {
+
 static const size_t LOG_COUNT = 100;
 
 class RingLog {
@@ -84,6 +86,4 @@ template <typename T> void write(std::ostream &stream, const T &val) {
   stream.write(reinterpret_cast<const char*>(&val), sizeof(T));
 }
 
-void printStack();
-void printExceptionStack();
-
+} // namespace pagan

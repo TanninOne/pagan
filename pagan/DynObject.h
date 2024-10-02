@@ -12,6 +12,8 @@
 #include <any>
 #include <string_view>
 
+namespace pagan {
+
 class TypeSpec;
 class ObjectIndex;
 class ObjectIndexTable;
@@ -221,7 +223,7 @@ inline T DynObject::get(std::string_view key) const {
   std::tie(typeId, propBuffer, args) = getEffectiveType(key);
 
   if (typeId >= TypeId::custom) {
-    throw IncompatibleType(std::format("expected POD for key {}, got {}", key, typeId));
+    throw IncompatibleType(std::format("expected POD for key \"{}\", got {}", key, typeId));
   }
 
   std::shared_ptr<IOWrapper> dataStream = m_Streams.get(m_ObjectIndex->dataStream);
@@ -250,7 +252,7 @@ inline std::vector<T> DynObject::getList(std::string_view key) const {
   std::tie(typeId, propBuffer, onAssign) = resolveTypeAtKey(key, false);
 
   if (typeId >= TypeId::custom) {
-    throw IncompatibleType(std::format("expected POD list for key {}, got {}", key, typeId));
+    throw IncompatibleType(std::format("expected POD list for key \"{}\", got {}", key, typeId));
   }
 
   std::shared_ptr<IOWrapper> dataStream = m_Streams.get(m_ObjectIndex->dataStream);
@@ -368,7 +370,7 @@ inline void DynObject::setList(const char *key, const std::vector<T> &value) {
   std::tie(typeId, offset, size, onAssign) = getFullSpec(key);
 
   if (typeId >= TypeId::custom) {
-    throw IncompatibleType(std::format("expected POD list for key {}, got {}", key, typeId));
+    throw IncompatibleType(std::format("expected POD list for key \"{}\", got {}", key, typeId));
   }
 
   // LogBracket::log(std::format("write at index {0} + {1}", m_ObjectIndex->properties, offset));
@@ -400,3 +402,4 @@ inline void DynObject::setList(const char *key, const std::vector<T> &value) {
   }
 }
 
+} // namespace pagan

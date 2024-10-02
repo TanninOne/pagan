@@ -40,7 +40,6 @@ struct IntegralCaster {
     }
     catch (const std::exception& e) {
       std::cout << "invalid caster type requested " << type.name() << " - " << e.what() << std::endl;
-      printExceptionStack();
       throw;
     }
   }

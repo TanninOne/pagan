@@ -1,10 +1,12 @@
 #pragma once
 
-#include "types.h"
-
 #include <string>
 #include <map>
 #include <variant>
+
+#include "types.h"
+
+namespace pagan {
 
 struct TypeProperty {
   std::string key;
@@ -29,3 +31,5 @@ struct TypeProperty {
   std::map<std::variant<std::string, int32_t>, uint32_t> switchCases;
   std::vector<std::string> argList;
 };
+
+} // namespace pagan

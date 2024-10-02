@@ -14,6 +14,7 @@ struct std::formatter<std::streampos> {
     }
 };
 
+namespace pagan {
 
 TypeSpec::TypeSpec(const char *name, uint32_t typeId, TypeRegistry *registry)
     : m_Name(name), m_Registry(registry), m_Id(typeId), m_StaticSize(0), m_BaseBuffer()
@@ -38,7 +39,7 @@ ObjSize TypeSpec::indexEOSArray(const TypeProperty &prop,
   uint8_t *tmpBuffer = m_BaseBuffer;
   memset(tmpBuffer, 0, 8 * NUM_STATIC_PROPERTIES);
   uint8_t *curPos = tmpBuffer;
-  uint8_t *endPos = tmpBuffer + size;
+  const uint8_t *endPos = tmpBuffer + size;
 
   int j = 0;
   try
@@ -66,8 +67,12 @@ ObjSize TypeSpec::indexEOSArray(const TypeProperty &prop,
         const size_t offset = curPos - tmpBuffer;
         // tmpArrayBuffer.resize(tmpArrayBuffer.size() * 2);
         size *= 2;
-        uint8_t *newBuffer = new uint8_t[size];
+        auto *newBuffer = new uint8_t[size];
         memcpy(newBuffer, tmpBuffer, offset);
+        if (tmpBuffer != m_BaseBuffer)
+        {
+          delete[] tmpBuffer;
+        }
         tmpBuffer = newBuffer;
 
         curPos = tmpBuffer + offset;
@@ -109,13 +114,12 @@ ObjSize TypeSpec::indexEOSArray(const TypeProperty &prop,
  * property data
  */
 
-uint8_t *TypeSpec::readPropToBuffer(const TypeProperty &prop, ObjectIndexTable *indexTable, uint8_t *buffer, DynObject *obj, const StreamRegistry &streams, DataStreamId dataStream, std::shared_ptr<IOWrapper> data, std::streampos streamLimit)
+uint8_t *TypeSpec::readPropToBuffer(const TypeProperty &prop, ObjectIndexTable *indexTable, uint8_t *buffer, const DynObject *obj, const StreamRegistry &streams, DataStreamId dataStream, std::shared_ptr<IOWrapper> data, std::streampos streamLimit)
 {
   if (prop.processing != "")
   {
     throw std::runtime_error("processing not supported");
   }
-  // LOG_F("read prop to buffer {} type {} (list: {})", prop.key, prop.typeId, prop.isList);
   if (prop.isList)
   {
     ObjSize count = prop.count(*obj);
@@ -568,8 +572,7 @@ auto TypeSpec::makeIndexFunc(const TypeProperty &prop,
       {
         auto before = data->tellg();
         auto res = this->indexCustom(prop, typeId, streams, indexTable, index, obj, dataStream, data, streamLimit);
-        auto after = data->tellg();
-        if ((after - before) == 0)
+        if (auto after = data->tellg(); (after - before) == 0)
         {
           throw std::runtime_error(std::format("0 byte custom type \"{}\" could lead to endless loop", m_Registry->getById(typeId)->getName()));
         }
@@ -595,7 +598,7 @@ auto TypeSpec::makeIndexFunc(const TypeProperty &prop,
   }
   else if (prop.typeId == TypeId::bits)
   {
-    return [=](uint8_t *index, const DynObject *obj, DataStreamId dataStream, std::shared_ptr<IOWrapper> data, std::streampos streamLimit) -> uint8_t *
+    return [this, prop](uint8_t *index, const DynObject *obj, DataStreamId dataStream, std::shared_ptr<IOWrapper> data, std::streampos streamLimit) -> uint8_t *
     {
       uint32_t size = prop.size(*obj);
       LOG_F("index bitmask off {}, size {}", this->m_BitmaskOffset, size);
@@ -614,7 +617,7 @@ auto TypeSpec::makeIndexFunc(const TypeProperty &prop,
   else
   {
     // index pod
-    return [=](uint8_t *index, const DynObject *obj, DataStreamId dataStream, std::shared_ptr<IOWrapper> data, std::streampos streamLimit) -> uint8_t *
+    return [this, prop](uint8_t *index, const DynObject *obj, DataStreamId dataStream, std::shared_ptr<IOWrapper> data, std::streampos streamLimit) -> uint8_t *
     {
       LOG_F("reset bitmask offset (4)");
       this->m_BitmaskOffset = 0;
@@ -625,89 +628,4 @@ auto TypeSpec::makeIndexFunc(const TypeProperty &prop,
   }
 }
 
-TypePropertyBuilder::TypePropertyBuilder(TypeProperty *wrappee, std::function<void()> cb)
-    : m_Wrappee(wrappee), m_Callback(cb)
-{
-}
-
-TypePropertyBuilder &TypePropertyBuilder::withProcessing(const std::string &algorithm)
-{
-  m_Wrappee->processing = algorithm;
-  return *this;
-}
-
-TypePropertyBuilder &TypePropertyBuilder::withCondition(ConditionFunc func)
-{
-  m_Wrappee->condition = func;
-  m_Wrappee->isConditional = true;
-  return *this;
-}
-
-TypePropertyBuilder &TypePropertyBuilder::withValidation(ValidationFunc func)
-{
-  m_Wrappee->validation = func;
-  m_Wrappee->isValidated = true;
-  return *this;
-}
-
-TypePropertyBuilder &TypePropertyBuilder::withDebug(const std::string &debugMessage)
-{
-  m_Wrappee->debug = debugMessage;
-  return *this;
-}
-
-TypePropertyBuilder &TypePropertyBuilder::withArguments(const std::vector<std::string> &args)
-{
-  m_Wrappee->argList = args;
-  return *this;
-}
-
-TypePropertyBuilder &TypePropertyBuilder::withSize(SizeFunc func)
-{
-  m_Wrappee->size = func;
-  m_Wrappee->hasSizeFunc = true;
-  return *this;
-}
-
-TypePropertyBuilder &TypePropertyBuilder::withEnum(const std::string &enumName)
-{
-  m_Wrappee->enumName = enumName;
-  m_Wrappee->hasEnum = true;
-  return *this;
-}
-
-TypePropertyBuilder &TypePropertyBuilder::withRepeatToEOS()
-{
-  m_Wrappee->count = eosCount;
-  m_Wrappee->isList = true;
-  return *this;
-}
-
-TypePropertyBuilder &TypePropertyBuilder::withCount(SizeFunc func)
-{
-  m_Wrappee->count = func;
-  m_Wrappee->isList = true;
-  return *this;
-}
-
-TypePropertyBuilder &TypePropertyBuilder::withRepeatCondition(ConditionFunc func)
-{
-  m_Wrappee->count = moreCount;
-  m_Wrappee->repeatCondition = func;
-  m_Wrappee->isList = true;
-  return *this;
-}
-
-TypePropertyBuilder &TypePropertyBuilder::withTypeSwitch(SwitchFunc func, const std::map<std::variant<std::string, int32_t>, uint32_t> &cases)
-{
-  m_Wrappee->switchFunc = func;
-  m_Wrappee->switchCases = cases;
-  m_Wrappee->isSwitch = true;
-  return *this;
-}
-
-TypePropertyBuilder &TypePropertyBuilder::onAssign(AssignCB func)
-{
-  m_Wrappee->onAssign = func;
-  return *this;
-}
+} // namespace pagan

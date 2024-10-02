@@ -3,6 +3,8 @@
 #include "../pagan/TypeSpec.h"
 #include "../pagan/DynObject.h"
 
+using namespace pagan;
+
 class SimpleFixture {
 protected:
   std::shared_ptr<TypeRegistry> registry;
@@ -13,7 +15,6 @@ public:
   }
 };
 
-// TEST_CASE_METHOD(SimpleFixture, "can create spec", "[typespec]") {
 TEST_CASE("can create and configure spec", "[typespec]") {
   std::shared_ptr<TypeRegistry> registry = TypeRegistry::init();
 

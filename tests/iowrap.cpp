@@ -1,6 +1,8 @@
 #include <catch2/catch_test_macros.hpp>
 #include "../pagan/iowrap.h"
 
+using namespace pagan;
+
 TEST_CASE("can read&write in memory", "[iowrap]") {
   IOWrapper *wrap = IOWrapper::memoryBuffer();
   wrap->write("foonarf", 7);

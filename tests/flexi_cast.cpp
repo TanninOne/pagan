@@ -1,6 +1,8 @@
 #include <catch2/catch_test_macros.hpp>
 #include "../pagan/flexi_cast.h"
 
+using namespace pagan;
+
 TEST_CASE( "can cast to correct type", "[flexi_cast]" ) {
   uint8_t u8 = 42;
   uint16_t u16 = 42;

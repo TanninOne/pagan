@@ -1,10 +1,12 @@
 #pragma once
 
-#include <memory>
-
 #include "ObjectIndexTable.h"
 #include "DynObject.h"
 #include "TypeRegistry.h"
+
+#include <memory>
+
+namespace pagan {
 
 class Parser
 {
@@ -52,3 +54,5 @@ template<typename T>
 inline DynObject Parser::createObject(const std::weak_ptr<TypeSpec>& spec, std::initializer_list<T> data) {
   return DynObject(spec, m_StreamRegistry, &m_IndexTable, data);
 }
+
+} // namespace pagan

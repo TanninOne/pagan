@@ -7,6 +7,8 @@
 #include <vector>
 #include <memory>
 
+namespace pagan {
+
 class TypeSpec;
 
 class ObjectIndexTable
@@ -61,3 +63,4 @@ private:
   uint32_t m_ArrayCount = 0;
 };
 
+} // namespace pagan

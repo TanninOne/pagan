@@ -4,6 +4,8 @@
 #include <string>
 #include <iomanip>
 
+namespace pagan {
+
 thread_local int LogBracket::s_Indent = 0;
 thread_local RingLog LogBracket::s_RingLog;
 
@@ -72,22 +74,4 @@ std::string LogBracket::indent() {
   return xStr + sStr;
 }
 
-// class MyStackWalker : public StackWalker
-// {
-// public:
-//   MyStackWalker() : StackWalker() {}
-// protected:
-//   virtual void OnOutput(LPCSTR szText) {
-//     std::cout << szText;
-//     StackWalker::OnOutput(szText);
-//   }
-// };
-// 
-// MyStackWalker sw;
-
-void printExceptionStack() {
-}
-
-void printStack() {
-}
-
+} // nmamespace pagan

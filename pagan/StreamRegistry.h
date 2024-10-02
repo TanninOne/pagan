@@ -5,6 +5,8 @@
 #include <vector>
 #include <memory>
 
+namespace pagan {
+
 typedef uint16_t DataStreamId;
 typedef uint64_t DataOffset;
 
@@ -31,3 +33,5 @@ private:
   std::vector<std::shared_ptr<IOWrapper>> m_Streams;
 
 };
+
+} // namespace pagan

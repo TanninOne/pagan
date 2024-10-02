@@ -2,6 +2,8 @@
 
 #include <string>
 
+namespace pagan {
+
 StreamRegistry::StreamRegistry() {
   m_Write.reset(IOWrapper::memoryBuffer());
   // offsets into the write stream are marked by being negative values
@@ -24,7 +26,10 @@ std::shared_ptr<IOWrapper> StreamRegistry::get(DataStreamId id) const {
   return m_Streams[id];
 }
 
-std::shared_ptr<IOWrapper> StreamRegistry::get(DataStreamId id, DataOffset offset) const {
+std::shared_ptr<IOWrapper> StreamRegistry::get(DataStreamId id,
+                                               DataOffset offset) const {
   m_Streams[id]->seekg(offset);
   return m_Streams[id];
 }
+
+} // namespace pagan

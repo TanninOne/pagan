@@ -9,7 +9,9 @@
 #include <regex>
 #include <fstream>
 
-typedef std::map<std::string, uint32_t> NamedTypes;
+namespace pagan {
+
+using NamedTypes = std::map<std::string, uint32_t>;
 
 uint32_t getNamedType(NamedTypes &types, Parser &parser, const std::string &name) {
   auto typeIter = types.find(name);
@@ -284,11 +286,11 @@ void addProperties(Parser &parser, NamedTypes &types, std::shared_ptr<TypeSpec> 
 
       try {
         // makeCases either has all keys as strings or all as numbers, so it's enough to check the first
-        int32_t dummy = std::get<int32_t>(cases.begin()->first);
-        prop.withTypeSwitch(makeFunc<int32_t>(typeNode["switch-on"].as<std::string>()), cases);
+        [[maybe_unused]] int32_t dummy = std::get<int32_t>(cases.begin()->first);
+        prop.withTypeSwitch(makeFunc<int32_t>(typeNode["switch-on"].as<std::string>()), std::move(cases));
       }
       catch (const std::bad_variant_access&) {
-        prop.withTypeSwitch(makeFunc<std::string>(typeNode["switch-on"].as<std::string>()), cases);
+        prop.withTypeSwitch(makeFunc<std::string>(typeNode["switch-on"].as<std::string>()), std::move(cases));
       }
     }
   }
@@ -362,3 +364,4 @@ std::shared_ptr<Parser> parserFromKSY(const char *specFileName) {
   return parser;
 }
 
+} // namespace pagan

@@ -4,6 +4,8 @@
 #include <format>
 #include <algorithm>
 
+namespace pagan {
+
 /**
  * stream-like wrapper around memory sections or files.
  * This reads entire blocks from the underlying storage and then serves reads from that cache
@@ -167,3 +169,4 @@ private:
 
 };
 
+} // namespace pagan

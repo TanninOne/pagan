@@ -4,6 +4,8 @@
 
 #include "catch2/catch_test_macros.hpp"
 
+using namespace pagan;
+
 class SimpleFixture {
 protected:
   std::shared_ptr<TypeRegistry> types;
@@ -108,8 +110,6 @@ public:
     : types(TypeRegistry::init())
     , listType(types->create("list"))
   {
-    // typedef std::function<std::variant<std::string, int32_t>(const IScriptQuery &object)> SwitchFunc;
-    // TypePropertyBuilder &TypePropertyBuilder::withTypeSwitch(SwitchFunc func, const std::map<std::variant<std::string, int32_t>, uint32_t> &cases) {
     listType->appendProperty("list", TypeId::runtime)
       .withTypeSwitch([](const IScriptQuery& object) { return "_"; }, { { "_", TypeId::uint8 } })
       .withRepeatToEOS()
@@ -141,8 +141,6 @@ public:
   {
     itemType->appendProperty("val", TypeId::int8);
 
-    // typedef std::function<std::variant<std::string, int32_t>(const IScriptQuery &object)> SwitchFunc;
-    // TypePropertyBuilder &TypePropertyBuilder::withTypeSwitch(SwitchFunc func, const std::map<std::variant<std::string, int32_t>, uint32_t> &cases) {
     listType->appendProperty("list", TypeId::runtime)
       .withTypeSwitch([](const IScriptQuery& object) { return "_"; }, { { "_", itemType->getId() } })
       .withRepeatToEOS()

@@ -1,6 +1,7 @@
 #include "Parser.h"
 #include "TypeSpec.h"
 
+namespace pagan {
 
 Parser::Parser()
   : m_TypeRegistry(TypeRegistry::init())
@@ -73,3 +74,5 @@ std::shared_ptr<TypeSpec> Parser::createType(const char * name) {
 std::shared_ptr<TypeSpec> Parser::createType(const char * name, const std::initializer_list<TypeAttribute>& attributes) {
   return m_TypeRegistry->create(name, attributes);
 }
+
+} // namespace pagan

@@ -7,6 +7,8 @@
 #include <any>
 #include <variant>
 
+namespace pagan {
+
 enum TypeId {
   int8 = 0,
   int16,
@@ -37,3 +39,5 @@ typedef std::function<bool(const std::any &value)> ValidationFunc;
 typedef std::function<std::variant<std::string, int32_t>(const IScriptQuery &object)> SwitchFunc;
 typedef std::function<std::any(const IScriptQuery& object)> ComputeFunc;
 typedef std::function<uint8_t* (uint8_t*, const DynObject*, uint16_t, std::shared_ptr<IOWrapper>, std::streampos)> IndexFunc;
+
+} // namespace pagan

@@ -4,6 +4,8 @@
 #include "../pagan/expr.h"
 #include "../pagan/IScriptQuery.h"
 
+using namespace pagan;
+
 class TestQuery : public IScriptQuery {
   std::any mValue;
   mutable int mSetCalls{ 0 };

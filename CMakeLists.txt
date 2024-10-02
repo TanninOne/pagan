@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.25)
 
-project(pagan VERSION 0.1.2 LANGUAGES CXX)
+project(pagan VERSION 0.2.0 LANGUAGES CXX)
 
 add_compile_options("/std:c++20")
 

@@ -3,6 +3,8 @@
 #include <sstream>
 #include <fstream>
 
+namespace pagan {
+
 static const int FILE_BUFFER_SIZE = 128 * 1024;
 
 IOWrapper *IOWrapper::memoryBuffer() {
@@ -54,3 +56,5 @@ IOWrapper::~IOWrapper() {
     delete [] m_Buffer;
   }
 }
+
+} // namespace pagan

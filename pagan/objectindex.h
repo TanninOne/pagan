@@ -2,10 +2,11 @@
 
 #include <memory>
 
+namespace pagan {
+
 class TypeSpec;
 
-struct ObjectIndex
-{
+struct ObjectIndex {
   // offset into the data stream where the data for this object can be found
   uint64_t dataOffset;
   // reference to the index of the object properties
@@ -24,6 +25,9 @@ static const int MIN_OBJECT_INDEX_SIZE = sizeof(ObjectIndex) - 1;
 
 bool isBitSet(const ObjectIndex *index, int bits);
 
-ObjectIndex *initIndex(uint8_t *memory, const std::shared_ptr<TypeSpec> type, uint16_t dataStream, uint64_t dataOffset);
+ObjectIndex *initIndex(uint8_t *memory, const std::shared_ptr<TypeSpec> type,
+                       uint16_t dataStream, uint64_t dataOffset);
 
 void assignProperies(ObjectIndex *index, uint8_t *buffer, size_t size);
+
+} // namespace pagan

@@ -7,15 +7,15 @@
 #include "util.h"
 #include "objectindextable.h"
 #include "DynObject.h"
-#include "constants.h"
-#include "typeproperty.h"
+#include "TypePropertyBuilder.h"
 
 #include <vector>
 #include <tuple>
 #include <functional>
 #include <any>
-#include <variant>
 #include <string_view>
+
+namespace pagan {
 
 // number of properties where we use a static buffer to buffer
 // the properties. If an object has more properties, we allocate a buffer
@@ -46,52 +46,19 @@ struct TypeProperty {
 };
 */
 
-static SizeFunc nullSize = [] (const IScriptQuery &object) -> ObjSize {
+static const SizeFunc nullSize = [] (const IScriptQuery &object) -> ObjSize {
   return -1;
 };
 
-static SizeFunc eosCount = [] (const IScriptQuery &object) -> ObjSize {
-  return COUNT_EOS;
-};
-
-static SizeFunc moreCount = [] (const IScriptQuery &object) -> ObjSize {
-  return COUNT_MORE;
-};
-
-static ConditionFunc trueFunc = [](const IScriptQuery &object) -> bool {
+static const ConditionFunc trueFunc = [](const IScriptQuery &object) -> bool {
   return true;
 };
 
-static ValidationFunc validFunc = [](const std::any& value) -> bool {
+static const ValidationFunc validFunc = [](const std::any& value) -> bool {
   return true;
 };
 
-static AssignCB nop = [] (IScriptQuery &object, const std::any& value) {
-};
-
-class TypePropertyBuilder {
-public:
-  TypePropertyBuilder(TypeProperty *wrappee, std::function<void()> cb);
-  ~TypePropertyBuilder() {
-    m_Callback();
-  }
-
-  TypePropertyBuilder &withCondition(ConditionFunc func);
-  TypePropertyBuilder &withSize(SizeFunc func);
-  TypePropertyBuilder &withEnum(const std::string &enumName);
-  TypePropertyBuilder &withRepeatToEOS();
-  TypePropertyBuilder &withCount(SizeFunc func);
-  TypePropertyBuilder &withRepeatCondition(ConditionFunc func);
-  TypePropertyBuilder &withTypeSwitch(SwitchFunc func, const std::map<std::variant<std::string, int32_t>, uint32_t> &cases);
-  TypePropertyBuilder &onAssign(AssignCB func);
-  TypePropertyBuilder &withProcessing(const std::string &algorithm);
-  TypePropertyBuilder &withValidation(ValidationFunc func);
-  TypePropertyBuilder &withDebug(const std::string &debugMessage);
-  TypePropertyBuilder &withArguments(const std::vector<std::string> &args);
-
-private:
-  TypeProperty *m_Wrappee;
-  std::function<void()> m_Callback;
+static const AssignCB nop = [] (IScriptQuery &object, const std::any& value) {
 };
 
 // TypePropertyBuilder makeProperty(const char *key, uint32_t type);
@@ -188,7 +155,7 @@ public:
   uint8_t *readPropToBuffer(const TypeProperty &prop,
                             ObjectIndexTable *indexTable,
                             uint8_t *buffer,
-                            DynObject *obj,
+                            const DynObject *obj,
                             const StreamRegistry &streams,
                             DataStreamId dataStream,
                             std::shared_ptr<IOWrapper> data,
@@ -242,15 +209,6 @@ public:
   std::string getName() const {
     return m_Name;
   }
-
-private:
-
-  /*
-  static uint32_t getNextId() {
-    static std::atomic<uint32_t> s_NextId = TypeId::custom;
-    return s_NextId++;
-  }
-  */
 
 private:
 
@@ -357,3 +315,4 @@ private:
 
 };
 
+} // namespace pagan

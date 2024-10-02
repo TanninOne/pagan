@@ -6,6 +6,8 @@
 #include <windows.h>
 #include <format>
 
+namespace pagan {
+
 #define DEF_TYPE(VAL_TYPE, TYPE_ID) \
 template <> VAL_TYPE type_read(TypeId type, char *index, std::shared_ptr<IOWrapper> &data, std::shared_ptr<IOWrapper> &write, char **indexAfter) { \
   if (type != TYPE_ID) {\
@@ -393,3 +395,4 @@ void type_copy_any(TypeId type, char *index, std::shared_ptr<IOWrapper> &output,
   }
 }
 
+} // namespace pagan

@@ -2,6 +2,7 @@
 #include "../pagan/TypeRegistry.h"
 #include "../pagan/TypeSpec.h"
 
+using namespace pagan;
 
 TEST_CASE("can create registry", "[typeregistry]") {
   std::shared_ptr<TypeRegistry> registry = TypeRegistry::init();

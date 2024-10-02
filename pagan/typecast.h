@@ -7,6 +7,8 @@
 #include <stdexcept>
 #include <memory>
 
+namespace  pagan {
+
 static const uint64_t OFFSET_MASK = 0x7FFFFFFFFFFFFFFFull;
 static const uint64_t WRITTEN_BIT = 0x01LLU << 63;
 
@@ -58,3 +60,4 @@ DECL_TYPE(uint64_t);
 DECL_TYPE(std::string);
 DECL_TYPE(float);
 
+} // namespace pagan

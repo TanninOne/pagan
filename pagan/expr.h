@@ -15,6 +15,8 @@
 #include <map>
 #include <typeindex>
 
+namespace pagan {
+
 typedef std::function<std::any(const std::any& args)> AnyFunc;
 
 template <typename T>
@@ -207,3 +209,5 @@ inline std::function<T(IScriptQuery &, const std::any&)> makeFuncMutable(const s
     throw std::runtime_error(std::format("failed to compile function \"{}\": {}", code, e.what()).c_str());
   }
 }
+
+} // namespace pagan

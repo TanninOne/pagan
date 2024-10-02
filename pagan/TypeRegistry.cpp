@@ -1,6 +1,8 @@
 #include "typeregistry.h"
 #include "typespec.h"
 
+namespace pagan {
+
 static const int INIT_TYPES_LENGTH = 64;
 
 static const char* BaseTypeNames[] = {
@@ -70,3 +72,5 @@ std::tuple<std::string, std::vector<std::string>> TypeRegistry::splitTypeName(co
 TypeRegistry::~TypeRegistry()
 {
 }
+
+} // namespace pagan

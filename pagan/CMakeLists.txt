@@ -14,7 +14,7 @@ set(HEADERS
   flexi_cast.h
   iowrap.h
   IScriptQuery.h
-  objectindex.h
+  ObjectIndex.h
   ObjectIndexTable.h
   Parser.h
   parserFromKSY.h
@@ -32,12 +32,14 @@ set(SOURCES
   expr.h
   flexi_cast.cpp
   iowrap.cpp
-  objectindex.cpp
+  ObjectIndex.cpp
   ObjectIndexTable.cpp
   Parser.cpp
   parserFromKSY.cpp
   StreamRegistry.cpp
   typecast.cpp
+  TypePropertyBuilder.h
+  TypePropertyBuilder.cpp
   TypeRegistry.cpp
   Typespec.cpp
   TypeSpec.h

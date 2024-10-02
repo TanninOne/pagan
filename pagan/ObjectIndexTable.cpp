@@ -1,6 +1,7 @@
 #include "objectindextable.h"
 #include "typespec.h"
 
+namespace pagan {
 
 static const uint32_t CHUNK_SIZE = 64 * 1024;
 
@@ -118,3 +119,5 @@ std::vector<uint8_t> ObjectIndexTable::getArrayIndex() const {
   }
   return result;
 }
+
+} // namespace pagan
