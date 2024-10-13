@@ -38,6 +38,12 @@ public:
   std::vector<uint8_t> getObjectIndex() const;
 
   /**
+   * return the entire properties index.
+   * This is a slow operation and will consume a fair bit of memory, it is only intended for debugging
+   */
+  std::vector<uint8_t> getPropertiesIndex() const;
+
+  /**
    * return the entire array index.
    * This is a slow operation and will consume a fair bit of memory, it is only intended for debugging
    */

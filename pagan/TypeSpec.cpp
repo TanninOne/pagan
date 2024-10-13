@@ -17,7 +17,7 @@ struct std::formatter<std::streampos> {
 namespace pagan {
 
 TypeSpec::TypeSpec(const char *name, uint32_t typeId, TypeRegistry *registry)
-    : m_Name(name), m_Registry(registry), m_Id(typeId), m_StaticSize(0), m_BaseBuffer()
+    : m_Name(name), m_Registry(registry), m_Id(typeId), m_StaticSize(0)
 {
 }
 
@@ -36,7 +36,9 @@ ObjSize TypeSpec::indexEOSArray(const TypeProperty &prop,
 {
 
   uint32_t size = NUM_STATIC_PROPERTIES * 8;
-  uint8_t *tmpBuffer = m_BaseBuffer;
+  // avoid allocating on the heap in the common case
+  uint8_t stackBuffer[8 * NUM_STATIC_PROPERTIES];
+  uint8_t *tmpBuffer = &stackBuffer[0];
   memset(tmpBuffer, 0, 8 * NUM_STATIC_PROPERTIES);
   uint8_t *curPos = tmpBuffer;
   const uint8_t *endPos = tmpBuffer + size;
@@ -65,11 +67,10 @@ ObjSize TypeSpec::indexEOSArray(const TypeProperty &prop,
       {
         // reallocate buffer if necessary
         const size_t offset = curPos - tmpBuffer;
-        // tmpArrayBuffer.resize(tmpArrayBuffer.size() * 2);
         size *= 2;
         auto *newBuffer = new uint8_t[size];
         memcpy(newBuffer, tmpBuffer, offset);
-        if (tmpBuffer != m_BaseBuffer)
+        if (tmpBuffer != stackBuffer)
         {
           delete[] tmpBuffer;
         }
@@ -88,19 +89,20 @@ ObjSize TypeSpec::indexEOSArray(const TypeProperty &prop,
   }
 
   ObjSize count = j;
-  uint32_t arraySize = static_cast<uint32_t>(curPos - tmpBuffer);
+  auto arraySize = static_cast<uint32_t>(curPos - tmpBuffer);
   LOG_F("indexed eos array with {} items to {:x}", count, (uint64_t)buffer);
   // std::cout << "array size " << arraySize << std::endl;
   // create a sufficiently sized array index
   ObjSize arrayOffset = indexTable->allocateArray(arraySize);
 
   // store the array index
-  memcpy(indexTable->arrayAddress(arrayOffset), tmpBuffer, arraySize);
+  auto arrayAddress = indexTable->arrayAddress(arrayOffset);
+  memcpy(arrayAddress, tmpBuffer, arraySize);
 
   // buffer receives the effective number of items and the offset into the array index
   memcpy(buffer, reinterpret_cast<char *>(&count), sizeof(ObjSize));
   memcpy(buffer + sizeof(ObjSize), reinterpret_cast<char *>(&arrayOffset), sizeof(ObjSize));
-  if (tmpBuffer != m_BaseBuffer)
+  if (tmpBuffer != stackBuffer)
   {
     delete[] tmpBuffer;
   }

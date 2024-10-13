@@ -311,8 +311,6 @@ private:
 
   uint32_t m_BitmaskOffset{0};
 
-  uint8_t m_BaseBuffer[8 * NUM_STATIC_PROPERTIES];
-
 };
 
 } // namespace pagan

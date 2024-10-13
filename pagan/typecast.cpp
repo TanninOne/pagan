@@ -210,6 +210,8 @@ template <> char *type_index_impl<std::string>(char *index, std::shared_ptr<IOWr
     while (data->get() != 0) {
       // skip
     }
+    // TODO zero-terminated strings are indexed only with their offset even though at this point we know the length,
+    //   would it help if we saved it?
     index += sizeof(int32_t);
   }
   if (offset < 100) {

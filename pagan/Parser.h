@@ -25,7 +25,30 @@ public:
   DynObject getObject(const std::shared_ptr<TypeSpec>& spec, size_t offset, DataStreamId dataStream = 0);
   std::vector<DynObject> getList(const std::shared_ptr<TypeSpec>& spec, size_t offset, DataStreamId dataStream = 0);
 
+  /**
+   * @brief return a copy of the object index
+   * This is an expensive operation, use for debugging only!
+   * 
+   * @return std::vector<uint8_t> 
+   */
   std::vector<uint8_t> objectIndex() const;
+
+  /**
+   * @brief return a copy of the properties index
+   * This is an expensive operation, use for debugging only!
+   * 
+   * @return std::vector<uint8_t> 
+   */
+  std::vector<uint8_t> propertiesIndex() const;
+
+  /**
+   * @brief return a copy of the array index
+   * This is an expensive operation, use for debugging only!
+   * This data is not actually useful in this form because the length of each array can only be
+   * determined with the properties index
+   * 
+   * @return std::vector<uint8_t> 
+   */
   std::vector<uint8_t> arrayIndex() const;
 
   std::string getTypeById(uint32_t typeId) const;

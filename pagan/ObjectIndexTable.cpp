@@ -7,9 +7,10 @@ static const uint32_t CHUNK_SIZE = 64 * 1024;
 
 // TODO: the code can not handle the case where the elements of a single array don't fit into one chunk.
 //   e.g. if the chunk size is only 64kb - each item can take up to 8 byte - no array can be larger than
-//   8000 items
-static const uint8_t ARRAY_CHUNK_SIZE_BITS = 24;
-static const uint32_t ARRAY_CHUNK_SIZE = static_cast<uint32_t>((1 << ARRAY_CHUNK_SIZE_BITS) - 1);
+//   8000 items. With 24 bits buffer size we can store up to 128 chunks for arrays of up to a combined 2 million items.
+static constexpr uint8_t ARRAY_CHUNK_SIZE_BITS = 24;
+static constexpr uint32_t ARRAY_CHUNK_SIZE = static_cast<uint32_t>((1 << ARRAY_CHUNK_SIZE_BITS) - 1);
+static constexpr uint32_t MAX_ARRAY_CHUNKS = 1 << (31 - ARRAY_CHUNK_SIZE_BITS);
 
 
 ObjectIndexTable::ObjectIndexTable()
@@ -62,7 +63,7 @@ ObjSize ObjectIndexTable::allocateArray(uint32_t size) {
     addArrayBuffer();
   }
 
-  ObjSize offset = static_cast<ObjSize>(((m_ArrayBuffers.size() - 1) << ARRAY_CHUNK_SIZE_BITS)
+  auto offset = static_cast<ObjSize>(((m_ArrayBuffers.size() - 1) << ARRAY_CHUNK_SIZE_BITS)
     | m_NextFreeArrayIndex);
 
   m_NextFreeArrayIndex += size;
@@ -93,6 +94,9 @@ void ObjectIndexTable::addPropBuffer() {
 }
 
 void ObjectIndexTable::addArrayBuffer() {
+  if (m_ArrayBuffers.size() >= MAX_ARRAY_CHUNKS) {
+    throw std::runtime_error("too many array chunks");
+  }
   m_ArrayBuffers.push_back(std::make_unique<uint8_t*>(new uint8_t[ARRAY_CHUNK_SIZE]));
   m_NextFreeArrayIndex = 0;
 }
@@ -107,6 +111,16 @@ std::vector<uint8_t> ObjectIndexTable::getObjectIndex() const {
   uint8_t *from = *(m_ObjBuffers.rbegin()->get());
   uint8_t* to = from + m_NextFreeObjIndex;
   result.insert(result.end(), from, to);
+  return result;
+}
+
+std::vector<uint8_t> ObjectIndexTable::getPropertiesIndex() const {
+  std::vector<uint8_t> result;
+  for (const auto &iter : m_PropBuffers) {
+    uint8_t *from = *(iter.get());
+    uint8_t *to = from + CHUNK_SIZE;
+    result.insert(result.end(), from, to);
+  }
   return result;
 }
 
