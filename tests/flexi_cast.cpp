@@ -49,6 +49,6 @@ TEST_CASE( "can cast to other integral type", "[flexi_cast]" ) {
 
 TEST_CASE("can cast integral type to string", "[flexi_cast]") {
   REQUIRE(flexi_cast<std::string>(std::any(42)) == "42");
-  REQUIRE(flexi_cast<std::string>(std::any(42ull)) == "42");
+  REQUIRE(flexi_cast<std::string>(std::any(UINT64_C(42))) == "42");
 }
 
