@@ -1,5 +1,5 @@
-#include "typeregistry.h"
-#include "typespec.h"
+#include "TypeRegistry.h"
+#include "TypeSpec.h"
 
 namespace pagan {
 
@@ -15,7 +15,7 @@ TypeRegistry::TypeRegistry()
 {
   m_Types.resize(INIT_TYPES_LENGTH);
   for (int i = 0; i < custom; ++i) {
-    m_Types[i] = std::shared_ptr<TypeSpec>(new TypeSpec(BaseTypeNames[i], i, this));
+    m_Types[i] = std::make_shared<TypeSpec>(BaseTypeNames[i], i, this);
   }
 }
 
@@ -24,13 +24,12 @@ std::shared_ptr<TypeSpec> TypeRegistry::create(const char *name) {
   std::vector<std::string> args;
   std::tie(funcName, args) = splitTypeName(name);
 
-  auto existing = m_TypeIds.find(funcName);
-  if (existing != m_TypeIds.end()) {
+  if (auto existing = m_TypeIds.find(funcName); existing != m_TypeIds.end()) {
     return m_Types[existing->second];
   }
   uint32_t typeId = nextId();
 
-  std::shared_ptr<TypeSpec> res(new TypeSpec(funcName.c_str(), typeId, this));
+  auto res(std::make_shared<TypeSpec>(funcName.c_str(), typeId, this));
   if (m_Types.size() <= typeId) {
     m_Types.resize(m_Types.size() * 2);
   }
@@ -52,8 +51,7 @@ std::tuple<std::string, std::vector<std::string>> TypeRegistry::splitTypeName(co
   std::vector<std::string> args;
 
   size_t len = strlen(name);
-  const char *bracketPos = strchr(name, '(');
-  if (bracketPos != nullptr) {
+  if (const char *bracketPos = strchr(name, '('); bracketPos != nullptr) {
     size_t namePartLen = bracketPos - name;
     std::string argListString(bracketPos + 1, len - namePartLen - 2);
     funcName = std::string(name, namePartLen);

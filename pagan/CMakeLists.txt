@@ -14,7 +14,7 @@ set(HEADERS
   flexi_cast.h
   iowrap.h
   IScriptQuery.h
-  ObjectIndex.h
+  objectindex.h
   ObjectIndexTable.h
   Parser.h
   parserFromKSY.h
@@ -32,7 +32,7 @@ set(SOURCES
   expr.h
   flexi_cast.cpp
   iowrap.cpp
-  ObjectIndex.cpp
+  objectindex.cpp
   ObjectIndexTable.cpp
   Parser.cpp
   parserFromKSY.cpp
@@ -63,7 +63,5 @@ target_sources(${PROJECT_NAME}
 )
 
 target_link_libraries(${PROJECT_NAME} yaml-cpp::yaml-cpp cpptrace::cpptrace pagan::expr)
-
-set_property(TARGET ${PROJECT_NAME} PROPERTY CXX_STANDARD 20)
 
 set_target_properties(${PROJECT_NAME} PROPERTIES EXPORT_NAME "pagan::pagan")

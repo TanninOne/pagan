@@ -12,11 +12,10 @@ static const size_t LOG_COUNT = 100;
 
 class RingLog {
 public:
-  RingLog() {
-  }
+  RingLog() = default;
 
-  void log(const std::string& line) {
-    m_Buffers[count % LOG_COUNT] = line;
+  void log(std::string line) {
+    m_Buffers[count % LOG_COUNT] = std::move(line);
     ++count;
   }
 
@@ -31,7 +30,7 @@ public:
 
 private:
   int count = 0;
-  std::string m_Buffers[LOG_COUNT];
+  std::array<std::string, LOG_COUNT> m_Buffers;
 };
 
 #ifdef NOLOG
@@ -65,7 +64,7 @@ public:
 
 protected:
 
-  LogBracket(const std::string &message);
+  explicit LogBracket(const std::string &message);
 
   static std::string indent();
 
@@ -82,7 +81,6 @@ template <typename T> T read(std::istream &stream) {
 }
 
 template <typename T> void write(std::ostream &stream, const T &val) {
-  LOG_F("write at {0}", stream.tellp());
   stream.write(reinterpret_cast<const char*>(&val), sizeof(T));
 }
 

@@ -40,9 +40,6 @@ target_link_libraries(${PROJECT_NAME} ${CMAKE_JS_LIB} yaml-cpp::yaml-cpp cpptrac
 
 add_compile_options("/std:c++latest")
 
-# target_compile_features(${PROJECT_NAME} PRIVATE cxx_std_20)
-set_property(TARGET ${PROJECT_NAME} PROPERTY CXX_STANDARD 20)
-
 execute_process(COMMAND node -p "require('node-addon-api').include" WORKING_DIRECTORY ${CMAKE_SOURCE_DIR} OUTPUT_VARIABLE NODE_ADDON_API_DIR)
 
 string(REGEX REPLACE "[\r\n\"]" "" NODE_ADDON_API_DIR ${NODE_ADDON_API_DIR})
@@ -61,7 +58,6 @@ target_link_libraries(tests
     Catch2::Catch2WithMain
     yaml-cpp::yaml-cpp
     cpptrace::cpptrace)
-set_property(TARGET tests PROPERTY CXX_STANDARD 20)
 
 # generate pdbs in release builds because cmake-js doesn't support RelWithDebInfo as a build target
 # set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /Zi")

@@ -83,8 +83,8 @@ void DynObject::saveTo(std::shared_ptr<IOWrapper> file) {
 
       uint8_t* arrayCur = arrayData;
 
-      for (int i = 0; i < arrayProp.count; ++i) {
-        LOG_F("save arr ele {0} / {1} -> {2} - {3}", i, arrayProp.count, (uint64_t)arrayCur, (uint64_t)file->tellp());
+      for (int j = 0; j < arrayProp.count; ++j) {
+        LOG_F("save arr ele {0} / {1} -> {2} - {3}", j, arrayProp.count, (uint64_t)arrayCur, (uint64_t)file->tellp());
         arrayCur = savePropTo(file, typeId, arrayCur);
       }
     }
@@ -548,7 +548,7 @@ std::tuple<uint8_t*, ObjSize, uint32_t> DynObject::accessArrayIndex(std::string_
     std::function<bool(uint8_t*)> repeatCondition;
     if (arrayProp.count == COUNT_MORE) {
       std::shared_ptr<TypeSpec> itemType(m_Spec->getRegistry()->getById(prop.typeId));
-      LOG_F("repeat-until getList");
+      LOG("repeat-until getList");
       repeatCondition = [&](uint8_t* pos) -> bool {
         // we need the DynObject to correctly evaluate the loop condition but at this point, the object index is only stored in a temporary
         // location, identified by pos

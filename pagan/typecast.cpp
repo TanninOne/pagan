@@ -1,10 +1,11 @@
 #include "typecast.h"
 #include "util.h"
-#include "dynobject.h"
+#include "DynObject.h"
 
 #include <cassert>
+#ifdef WIN32
 #include <windows.h>
-#include <format>
+#endif // WIN32
 
 namespace pagan {
 

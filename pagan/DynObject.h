@@ -1,6 +1,6 @@
 #pragma once
 
-#include "streamregistry.h"
+#include "StreamRegistry.h"
 #include "typecast.h"
 #include "util.h"
 #include "flexi_cast.h"

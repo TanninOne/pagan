@@ -519,7 +519,9 @@ uint8_t *TypeSpec::indexCustom(const TypeProperty &prop, uint32_t typeId,
 
     std::streamoff dynSize = data->tellg() - dataPos;
 
-    LOG_F("parsed object (type {}) size was {} ({} - {})", getRegistry()->getById(typeId)->getName(), dynSize, data->tellg(), dataPos);
+    LOG_F("parsed object (type {}) size was {} ({} - {})",
+          getRegistry()->getById(typeId)->getName(), dynSize, data->tellg(),
+          static_cast<uint64_t>(dataPos));
 
     // type_index expects the data stream to be positioned at the start of the indexed object
 
@@ -544,7 +546,7 @@ auto TypeSpec::makeIndexFunc(const TypeProperty &prop,
     return [this, prop, indexTable, streams](uint8_t *index, const DynObject *obj, DataStreamId dataStream, std::shared_ptr<IOWrapper> data, std::streampos streamLimit) -> uint8_t *
     {
       // TODO: currently assumes a runtime type never resolves to bit - which I really hope is true
-      LOG_F("reset bitmask offset (1)");
+      LOG("reset bitmask offset (1)");
       this->m_BitmaskOffset = 0;
       std::variant<std::string, int32_t> caseId = prop.switchFunc(*obj);
       auto iter = prop.switchCases.find(caseId);
@@ -606,7 +608,7 @@ auto TypeSpec::makeIndexFunc(const TypeProperty &prop,
       LOG_F("index bitmask off {}, size {}", this->m_BitmaskOffset, size);
       if ((static_cast<uint64_t>(this->m_BitmaskOffset) + size) > sizeof(uint32_t) * 8)
       {
-        LOG_F("reset bitmask offset (3)");
+        LOG("reset bitmask offset (3)");
         this->m_BitmaskOffset = 0;
       }
 
@@ -621,7 +623,7 @@ auto TypeSpec::makeIndexFunc(const TypeProperty &prop,
     // index pod
     return [this, prop](uint8_t *index, const DynObject *obj, DataStreamId dataStream, std::shared_ptr<IOWrapper> data, std::streampos streamLimit) -> uint8_t *
     {
-      LOG_F("reset bitmask offset (4)");
+      LOG("reset bitmask offset (4)");
       this->m_BitmaskOffset = 0;
       LOG_F("index pod type {}", m_Registry->getById(prop.typeId)->getName());
       char *res = type_index(static_cast<TypeId>(prop.typeId), prop.size, reinterpret_cast<char *>(index), data, obj, prop.debug);

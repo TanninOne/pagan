@@ -2,7 +2,7 @@
 
 #include "objectindex.h"
 #include "types.h"
-#include "streamregistry.h"
+#include "StreamRegistry.h"
 
 #include <vector>
 #include <memory>
@@ -16,7 +16,7 @@ class ObjectIndexTable
 public:
 
   ObjectIndexTable();
-  ~ObjectIndexTable();
+  ~ObjectIndexTable() = default;
 
   ObjectIndex *allocateObject(const std::shared_ptr<TypeSpec> type, DataStreamId dataStream, DataOffset dataOffset);
   void setProperties(ObjectIndex *obj, uint8_t *buffer, size_t size);

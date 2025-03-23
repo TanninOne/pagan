@@ -1,14 +1,15 @@
 #pragma once
 
 #include "types.h"
-#include "typeregistry.h"
+#include "TypeRegistry.h"
 #include "objectindex.h"
-#include "streamregistry.h"
+#include "StreamRegistry.h"
 #include "util.h"
-#include "objectindextable.h"
+#include "ObjectIndexTable.h"
 #include "DynObject.h"
 #include "TypePropertyBuilder.h"
 
+#include <memory>
 #include <vector>
 #include <tuple>
 #include <functional>
@@ -46,19 +47,19 @@ struct TypeProperty {
 };
 */
 
-static const SizeFunc nullSize = [] (const IScriptQuery &object) -> ObjSize {
+static const SizeFunc nullSize = [] ([[maybe_unused]] const IScriptQuery &object) -> ObjSize {
   return -1;
 };
 
-static const ConditionFunc trueFunc = [](const IScriptQuery &object) -> bool {
+static const ConditionFunc trueFunc = []([[maybe_unused]] const IScriptQuery &object) -> bool {
   return true;
 };
 
-static const ValidationFunc validFunc = [](const std::any& value) -> bool {
+static const ValidationFunc validFunc = []([[maybe_unused]] const std::any& value) -> bool {
   return true;
 };
 
-static const AssignCB nop = [] (IScriptQuery &object, const std::any& value) {
+static const AssignCB nop = [] ([[maybe_unused]] IScriptQuery &object, [[maybe_unused]] const std::any& value) {
 };
 
 // TypePropertyBuilder makeProperty(const char *key, uint32_t type);
@@ -108,7 +109,8 @@ public:
     LOG_F("append prop to {0} - {1} size index {2}, size data {3}", m_Id, key, m_IndexSize, m_StaticSize);
     m_SequenceIdx[key] = static_cast<int>(m_Sequence.size());
     m_Sequence.push_back({ key, type, nullSize, nullSize, trueFunc, validFunc, trueFunc, nop, false, false, false, false });
-    TypeProperty *prop = &*m_Sequence.rbegin();
+    // TypeProperty *prop = &*m_Sequence.rbegin();
+    TypeProperty *prop = std::to_address(m_Sequence.rbegin());
     return TypePropertyBuilder(prop, [this, type, prop]() {
       m_IndexSize += prop->isList ? (sizeof(ObjSize) * 2) : indexSize(type);
       if (prop->isConditional || prop->isList || prop->hasSizeFunc || prop->isSwitch || (prop->typeId == TypeId::stringz)) {
@@ -250,8 +252,9 @@ private:
       case TypeId::string: return 2 * sizeof(int32_t);
       // untyped byte array is stored in the same way as a string
       case TypeId::bytes: return 2 * sizeof(int32_t);
+      default:
+        throw std::runtime_error("invalid type id");
     }
-    throw std::runtime_error("invalid type id");
   }
 
   void addStaticSize(uint32_t typeId) {

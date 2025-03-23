@@ -1,5 +1,5 @@
-#include "objectindextable.h"
-#include "typespec.h"
+#include "ObjectIndexTable.h"
+#include "TypeSpec.h"
 
 namespace pagan {
 
@@ -19,12 +19,6 @@ ObjectIndexTable::ObjectIndexTable()
   addPropBuffer();
   addArrayBuffer();
 }
-
-
-ObjectIndexTable::~ObjectIndexTable()
-{
-}
-
 
 ObjectIndex *ObjectIndexTable::allocateObject(const std::shared_ptr<TypeSpec> type, DataStreamId dataStream, DataOffset dataOffset) {
   int bitsetSize = (type->getNumProperties() + 7) / 8;
