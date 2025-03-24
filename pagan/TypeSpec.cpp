@@ -138,7 +138,8 @@ uint8_t *TypeSpec::readPropToBuffer(const TypeProperty &prop, ObjectIndexTable *
       uint8_t *curPos = indexTable->arrayAddress(arrayOffset);
       LOG_F("allocate eos array data {}, arrayidx {}, arrayref {}, eos {}", dataOffset, arrayOffset, reinterpret_cast<uint64_t>(curPos), static_cast<uint64_t>(streamLimit));
       memcpy(curPos, reinterpret_cast<char *>(&dataOffset), sizeof(uint64_t));
-      memcpy(curPos + sizeof(uint64_t), reinterpret_cast<char *>(&streamLimit), sizeof(uint64_t));
+      auto streamLimitNum = static_cast<uint64_t>(streamLimit);
+      memcpy(curPos + sizeof(uint64_t), reinterpret_cast<char *>(&streamLimitNum), sizeof(uint64_t));
 
       memcpy(buffer, reinterpret_cast<char *>(&count), sizeof(ObjSize));
       memcpy(buffer + sizeof(ObjSize), reinterpret_cast<char *>(&arrayOffset), sizeof(ObjSize));

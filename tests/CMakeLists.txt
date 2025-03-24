@@ -1,6 +1,8 @@
 set(TEST_NAME "${PROJECT_NAME}_tests")
 
-add_definitions(-DNOMINMAX)
+if (MSVC)
+  add_definitions(-DNOMINMAX)
+endif ()
 
 find_package(Catch2 CONFIG REQUIRED)
 

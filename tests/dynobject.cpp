@@ -111,7 +111,7 @@ public:
     , listType(types->create("list"))
   {
     listType->appendProperty("list", TypeId::runtime)
-      .withTypeSwitch([](const IScriptQuery& object) { return "_"; }, { { "_", TypeId::uint8 } })
+      .withTypeSwitch([](const IScriptQuery&) { return "_"; }, { { "_", TypeId::uint8 } })
       .withRepeatToEOS()
       ;
 

@@ -17,7 +17,9 @@ list(FILTER SOURCE_FILES_PAGAN EXCLUDE REGEX ".*/mainesp.cpp")
 set(EXTERN "${CMAKE_SOURCE_DIR}/../extern")
 set(CMAKE_DEBUG_POSTFIX "d")
 
-add_definitions(-DNOMINMAX)
+if(MSVC)
+  add_definitions(-DNOMINMAX)
+endif()
 
 find_package(yaml-cpp REQUIRED)
 find_package(Catch2 REQUIRED)

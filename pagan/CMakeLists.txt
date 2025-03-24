@@ -1,7 +1,5 @@
 set(CMAKE_DEBUG_POSTFIX "d")
 
-add_definitions(-DNOMINMAX)
-
 option(NOLOG "Disable logging" OFF)
 
 find_package(yaml-cpp REQUIRED)
@@ -49,6 +47,8 @@ set(SOURCES
 if (MSVC)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /EHsc")
   set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS ON)
+
+  add_definitions(-DNOMINMAX)
 endif()
 
 if (NOLOG)

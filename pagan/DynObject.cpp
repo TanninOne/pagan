@@ -537,7 +537,7 @@ std::tuple<uint8_t*, ObjSize, uint32_t> DynObject::accessArrayIndex(std::string_
   uint8_t* arrayData = m_IndexTable->arrayAddress(arrayProp.offset);
 
   if ((arrayProp.count == COUNT_EOS) || (arrayProp.count == COUNT_MORE)) {
-    // with a dynamic length array we have to to index the objects to know the length of the array
+    // with a dynamic length array we have to index the objects to know the length of the array
     const TypeProperty& prop = getProperty(key);
     std::shared_ptr<IOWrapper> data = getDataStream();
     uint64_t arrayDataPos;
