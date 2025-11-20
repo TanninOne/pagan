@@ -2,6 +2,8 @@
 
 #include <iostream>
 #include <algorithm>
+#include <format>
+#include <cstring>
 
 namespace pagan {
 
@@ -120,7 +122,7 @@ public:
     }
 
     int64_t buffOffset = m_PosG - m_BufferPos;
-    memcpy(target, m_Buffer + buffOffset, count);
+    std::memcpy(target, m_Buffer + buffOffset, count);
     m_PosG += count;
   }
 

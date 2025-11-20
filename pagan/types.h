@@ -6,6 +6,8 @@
 #include <functional>
 #include <any>
 #include <variant>
+#include <cstdint>
+#include <memory>
 
 namespace pagan {
 

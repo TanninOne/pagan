@@ -39,7 +39,7 @@ set(SOURCES
   TypePropertyBuilder.h
   TypePropertyBuilder.cpp
   TypeRegistry.cpp
-  Typespec.cpp
+  TypeSpec.cpp
   TypeSpec.h
   util.cpp
 )
