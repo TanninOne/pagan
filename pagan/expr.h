@@ -118,7 +118,7 @@ inline std::function<SYP::Token(const std::string&)> makeGetAdapter(const IScrip
     else if (*keySegments.rbegin() == "length")
     {
       return SYP::Token("length", [](const std::vector<SYP::Token>& arguments) -> SYP::Token {
-        return arguments.at(0).getVariableName().length();
+        return static_cast<uint64_t>(arguments.at(0).getVariableName().length());
       });
     }
     else {
